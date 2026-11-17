@@ -1,0 +1,590 @@
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  Image,
+  ActivityIndicator,
+  StyleSheet,
+  Dimensions,
+  Alert,
+  RefreshControl,
+  Linking,
+  Platform,
+} from "react-native";
+import MaterialIcons from "react-native-vector-icons/MaterialIcons";
+import { theme } from "../utils/theme";
+import {
+  getPlaylistVideos,
+  formatDuration,
+  formatViewCount,
+} from "../api/youtube";
+import Toast from "react-native-toast-message";
+import Skeleton from "../components/ui/Skeleton";
+const { width: screenWidth } = Dimensions.get("window");
+const ITEM_WIDTH = screenWidth - 32; // 16px margin on each side
+
+export default function EpisodiosScreen() {
+  const [videos, setVideos] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextPageToken, setNextPageToken] = useState("");
+  const [showScrollToTop, setShowScrollToTop] = useState(false);
+
+  const flatListRef = useRef(null);
+
+  useEffect(() => {
+    loadInitialVideos();
+  }, []);
+
+  const loadInitialVideos = async () => {
+    try {
+      setLoading(true);
+      const response = await getPlaylistVideos("", 10);
+      setVideos(response.videos);
+      setNextPageToken(response.nextPageToken || "");
+    } catch (error) {
+      console.error("Erro ao carregar vídeos:", error);
+      Toast.show({
+        type: "error",
+        text1: "Erro",
+        text2: "Não foi possível carregar os vídeos",
+        visibilityTime: 4000,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadMoreVideos = async () => {
+
+    if (loadingMore || !nextPageToken) {
+      return;
+    }
+
+    try {
+      setLoadingMore(true);
+
+      const response = await getPlaylistVideos(nextPageToken, 10);
+
+      setVideos((prev) => {
+        const newVideos = [...prev, ...response.videos];
+        return newVideos;
+      });
+
+      setNextPageToken(response.nextPageToken || "");
+    } catch (error) {
+      console.error("Erro ao carregar mais vídeos:", error);
+      Toast.show({
+        type: "error",
+        text1: "Erro",
+        text2: "Não foi possível carregar mais vídeos",
+        visibilityTime: 3000,
+      });
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    setNextPageToken("");
+    await loadInitialVideos();
+    setRefreshing(false);
+  };
+
+  const scrollToTop = () => {
+    flatListRef.current?.scrollToOffset({ animated: true, offset: 0 });
+  };
+
+  const handleScroll = (event) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    setShowScrollToTop(offsetY > 1000); // Mostrar botão após 1000px de scroll
+  };
+
+  const openVideo = async (videoId, videoTitle) => {
+    try {
+      // Toast de feedback
+      Toast.show({
+        type: "info",
+        text1: "Abrindo vídeo...",
+        text2:
+          videoTitle.length > 50
+            ? videoTitle.substring(0, 50) + "..."
+            : videoTitle,
+        visibilityTime: 2000,
+      });
+
+      // URLs do YouTube em ordem de preferência
+      const youtubeUrls = [
+        // iOS: Tenta app YouTube primeiro
+        Platform.OS === "ios"
+          ? `vnd.youtube://www.youtube.com/watch?v=${videoId}`
+          : null,
+        // iOS: Esquema alternativo do YouTube
+        Platform.OS === "ios"
+          ? `youtube://www.youtube.com/watch?v=${videoId}`
+          : null,
+        // Todas as plataformas: Safari/navegador padrão
+        `https://www.youtube.com/watch?v=${videoId}`,
+      ].filter(Boolean); // Remove valores null
+
+        videoId,
+        plataforma: Platform.OS,
+        urls: youtubeUrls,
+      });
+
+      let opened = false;
+
+      // Tenta cada URL sequencialmente
+      for (let i = 0; i < youtubeUrls.length; i++) {
+        const url = youtubeUrls[i];
+          `📹 [YouTube] Tentativa ${i + 1}/${youtubeUrls.length}:`,
+          url
+        );
+
+        try {
+          const canOpen = await Linking.canOpenURL(url);
+
+          if (canOpen) {
+            await Linking.openURL(url);
+            opened = true;
+            break;
+          }
+        } catch (urlError) {
+            `📹 [YouTube] ⚠️ Falha na tentativa ${i + 1}:`,
+            urlError.message
+          );
+          // Continua para a próxima URL
+        }
+      }
+
+      // Se nenhuma URL funcionou, mostra erro detalhado
+      if (!opened) {
+        console.error("📹 [YouTube] ❌ Nenhuma URL de YouTube funcionou");
+
+        let errorMessage = "Não foi possível abrir o vídeo no YouTube.";
+        let errorDetails =
+          "Verifique se o app do YouTube está instalado ou tente novamente.";
+
+        if (Platform.OS === "ios") {
+          errorMessage = "Erro ao Abrir YouTube";
+          errorDetails =
+            "Não conseguimos abrir o vídeo. Tente novamente ou abra o YouTube manualmente.";
+        }
+
+        Alert.alert(errorMessage, errorDetails, [
+          {
+            text: "Cancelar",
+            style: "cancel",
+          },
+          {
+            text: "Tentar Novamente",
+            onPress: () => openVideo(videoId, videoTitle),
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error("📹 [YouTube] Erro geral ao abrir vídeo:", {
+        code: error.code,
+        message: error.message,
+        videoId,
+      });
+
+      Alert.alert(
+        "Erro ao Abrir Vídeo",
+        "Ocorreu um erro inesperado. Verifique sua conexão com a internet e tente novamente.",
+        [{ text: "OK" }]
+      );
+    }
+  };
+
+  const formatPublishedDate = (dateString) => {
+    if (!dateString) return "Data não disponível";
+
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffTime = Math.abs(now - date);
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 0) return "Hoje";
+      if (diffDays === 1) return "Ontem";
+      if (diffDays < 7) return `${diffDays} dias atrás`;
+      if (diffDays < 30) return `${Math.floor(diffDays / 7)} semanas atrás`;
+      if (diffDays < 365) return `${Math.floor(diffDays / 30)} meses atrás`;
+      return `${Math.floor(diffDays / 365)} anos atrás`;
+    } catch (error) {
+      console.error("Erro ao formatar data:", error);
+      return "Data inválida";
+    }
+  };
+
+  const VideoItem = ({ item }) => {
+      id: item.id,
+      title: item.title?.substring(0, 30) + "...",
+      viewCount: item.viewCount,
+      channelTitle: item.channelTitle,
+      publishedAt: item.publishedAt,
+      thumbnail: item.thumbnail ? "✓" : "✗",
+    });
+
+    const formattedViews = formatViewCount(item.viewCount);
+    const formattedDate = formatPublishedDate(item.publishedAt);
+
+      viewCount: item.viewCount,
+      formattedViews,
+      publishedAt: item.publishedAt,
+      formattedDate,
+    });
+
+    return (
+      <TouchableOpacity
+        style={styles.videoItem}
+        onPress={() => openVideo(item.id, item.title)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.thumbnailContainer}>
+          {item.thumbnail ? (
+            <Image source={{ uri: item.thumbnail }} style={styles.thumbnail} />
+          ) : (
+            <View
+              style={[
+                styles.thumbnail,
+                {
+                  backgroundColor: "#f0f0f0",
+                  justifyContent: "center",
+                  alignItems: "center",
+                },
+              ]}
+            >
+              <MaterialIcons name="videocam-off" size={40} color="#ccc" />
+            </View>
+          )}
+
+          {/* Ícone de play centralizado */}
+          <View style={styles.playIconContainer}>
+            <MaterialIcons
+              name="play-circle-filled"
+              size={50}
+              color="rgba(255, 255, 255, 0.9)"
+            />
+          </View>
+
+          <View style={styles.durationBadge}>
+            <Text style={styles.durationText}>
+              {formatDuration(item.duration)}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.videoInfo}>
+          <Text style={styles.videoTitle} numberOfLines={2}>
+            {item.title || "Título não disponível"}
+          </Text>
+
+          <Text style={styles.channelName} numberOfLines={1}>
+            {item.channelTitle || "Canal não disponível"}
+          </Text>
+
+          <View style={styles.videoStats}>
+            <Text style={styles.viewCount}>{formattedViews} visualizações</Text>
+            <Text style={styles.publishedDate}>• {formattedDate}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderHeader = () => (
+    <View style={styles.titleSection}>
+      <Text style={styles.sectionTitle}>Últimos Episódios</Text>
+      <Text style={styles.sectionSubtitle}>Episódios toda semana</Text>
+    </View>
+  );
+
+  const renderFooter = () => {
+    if (!loadingMore && !nextPageToken) {
+      // Fim da playlist
+      return (
+        <View style={styles.endOfListContainer}>
+          <Text style={styles.endOfListText}>Fim dos episódios</Text>
+          <Text style={styles.endOfListSubtext}>
+            Todos os vídeos foram carregados
+          </Text>
+        </View>
+      );
+    }
+
+    if (!loadingMore) return null;
+
+    return (
+      <View style={styles.loadingFooter}>
+        <ActivityIndicator size="small" color={theme.colors.primary} />
+        <Text style={styles.loadingText}>Carregando mais episódios...</Text>
+      </View>
+    );
+  };
+
+  const renderEmpty = () => {
+    if (loading) return null;
+
+    return (
+      <View style={styles.emptyContainer}>
+        <MaterialIcons name="videocam-off" size={64} color="#ccc" />
+        <Text style={styles.emptyText}>Nenhum vídeo encontrado</Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={loadInitialVideos}
+        >
+          <Text style={styles.retryButtonText}>Tentar novamente</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        {renderHeader()}
+        {[1, 2, 3].map((key) => (
+          <View key={key} style={styles.videoItem}>
+            <Skeleton width="100%" height={(ITEM_WIDTH * 9) / 16} style={{ borderTopLeftRadius: 12, borderTopRightRadius: 12, borderRadius: 0 }} />
+            <View style={styles.videoInfo}>
+              <Skeleton width="90%" height={20} style={{ marginBottom: 8 }} />
+              <Skeleton width="50%" height={16} style={{ marginBottom: 8 }} />
+              <Skeleton width="30%" height={14} />
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        ref={flatListRef}
+        data={videos}
+        keyExtractor={(item) => item.id}
+        renderItem={VideoItem}
+        ListHeaderComponent={renderHeader}
+        onEndReached={loadMoreVideos}
+        onEndReachedThreshold={0.3}
+        onScroll={handleScroll}
+        scrollEventThrottle={400}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.colors.primary]}
+          />
+        }
+        ListFooterComponent={renderFooter}
+        ListEmptyComponent={renderEmpty}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={
+          videos.length === 0 ? styles.emptyListContainer : null
+        }
+      />
+
+      {showScrollToTop && (
+        <TouchableOpacity
+          style={styles.scrollToTopButton}
+          onPress={scrollToTop}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="keyboard-arrow-up" size={24} color="white" />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  titleSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    backgroundColor: theme.colors.background,
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: theme.colors.foreground,
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 16,
+    color: "#666",
+    fontWeight: "400",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: theme.colors.background,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: theme.colors.textMuted,
+  },
+  videoItem: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    shadowColor: "#000000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 6,
+    overflow: "visible",
+  },
+  thumbnailContainer: {
+    position: "relative",
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  thumbnail: {
+    width: ITEM_WIDTH,
+    height: (ITEM_WIDTH * 9) / 16, // Aspect ratio 16:9
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+
+    backgroundColor: "#f0f0f0",
+  },
+  playIconContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  durationBadge: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  durationText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  videoInfo: {
+    padding: 12,
+  },
+  videoTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: theme.colors.foreground,
+    marginBottom: 6,
+    lineHeight: 22,
+  },
+  channelName: {
+    fontSize: 14,
+    color: "#888",
+    marginBottom: 6,
+    fontWeight: "400",
+  },
+  videoStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  viewCount: {
+    fontSize: 12,
+    color: "#666",
+    fontWeight: "400",
+  },
+  publishedDate: {
+    fontSize: 12,
+    color: "#666",
+    marginLeft: 4,
+    fontWeight: "400",
+  },
+  loadingFooter: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+  },
+  endOfListContainer: {
+    alignItems: "center",
+    padding: 20,
+    marginVertical: 16,
+  },
+  endOfListText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#666",
+    marginBottom: 4,
+  },
+  endOfListSubtext: {
+    fontSize: 14,
+    color: "#999",
+    textAlign: "center",
+  },
+  emptyContainer: {
+    alignItems: "center",
+    padding: 32,
+  },
+  emptyListContainer: {
+    flexGrow: 1,
+    justifyContent: "center",
+  },
+  emptyText: {
+    fontSize: 16,
+    color: theme.colors.textMuted,
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  scrollToTopButton: {
+    position: "absolute",
+    bottom: 20,
+    right: 20,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 28,
+    width: 56,
+    height: 56,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000000",
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+});

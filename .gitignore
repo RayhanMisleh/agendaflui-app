@@ -1,0 +1,13 @@
+node_modules/
+.expo/
+dist/
+web-build/
+ios/
+android/
+*.log
+.DS_Store
+.env
+.env.*
+
+# Tem uma chave de API escrita no código: fica fora do repositório até a chave sair do arquivo.
+src/api/youtube.js

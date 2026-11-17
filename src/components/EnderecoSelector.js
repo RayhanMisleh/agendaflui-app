@@ -1,0 +1,605 @@
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  TextInput,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
+import MaterialIcons from "react-native-vector-icons/MaterialIcons";
+import { useTheme } from "../utils/ThemeContext";
+import { getUserEnderecos, createEndereco } from "../api/enderecosApi";
+import { getUserId } from "../api/authApi";
+import {
+  buscarEnderecoPorCep,
+  formatarCep,
+  validarCep,
+} from "../services/cepService";
+import Toast from "react-native-toast-message";
+
+export default function EnderecoSelector({
+  onEnderecoSelect,
+  selectedEnderecoId,
+}) {
+  const { theme, themeMode } = useTheme();
+  const isDark = theme?.isDarkMode ?? (themeMode === "dark");
+  const styles = getStyles(theme, isDark);
+
+  const [enderecos, setEnderecos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [loadingCep, setLoadingCep] = useState(false);
+  const [formData, setFormData] = useState({
+    cep: "",
+    rua: "",
+    numero: "",
+    bairro: "",
+    cidade: "",
+    estado: "",
+    complemento: "",
+  });
+
+  useEffect(() => {
+    loadEnderecos();
+  }, []);
+
+  const loadEnderecos = async () => {
+    try {
+      setLoading(true);
+      const response = await getUserEnderecos();
+      if (response.success) {
+        const enderecosList = response.data || [];
+        setEnderecos(enderecosList);
+        setShowForm(enderecosList.length === 0);
+        
+        // Auto-selecionar o primeiro endereço caso não tenha nenhum selecionado
+        if (enderecosList.length > 0 && !selectedEnderecoId) {
+          onEnderecoSelect(enderecosList[0]);
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao carregar endereços:", error);
+      Toast.show({
+        type: "error",
+        text1: "Erro",
+        text2: "Não foi possível carregar os endereços",
+        visibilityTime: 3000,
+      });
+      setShowForm(true); // Mostrar formulário em caso de erro
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateEndereco = async () => {
+    // Validação simples
+    if (
+      !formData.cep ||
+      !formData.rua ||
+      !formData.numero ||
+      !formData.bairro ||
+      !formData.cidade ||
+      !formData.estado
+    ) {
+      Toast.show({
+        type: "error",
+        text1: "Erro",
+        text2: "Preencha todos os campos obrigatórios",
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    // Validar CEP
+    if (!validarCep(formData.cep)) {
+      Toast.show({
+        type: "error",
+        text1: "Erro",
+        text2: "CEP deve ter 8 dígitos",
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    // Validar se o estado tem 2 caracteres
+    if (formData.estado.length !== 2) {
+      Toast.show({
+        type: "error",
+        text1: "Erro",
+        text2: "Estado deve ter 2 letras (ex: SP, RJ)",
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    try {
+      setCreating(true);
+
+      // Buscar user_id do storage
+      const userId = await getUserId();
+
+      const enderecoData = {
+        ...formData,
+        cep: formData.cep.replace(/\D/g, ""), // Enviar CEP limpo (apenas números)
+        user_id: userId || 1, // Usar 1 como fallback
+      };
+
+      const response = await createEndereco(enderecoData);
+
+      if (response.success) {
+        Toast.show({
+          type: "success",
+          text1: "Sucesso",
+          text2: "Endereço criado com sucesso",
+          visibilityTime: 3000,
+        });
+
+        // Buscar os endereços atualizados para selecionar o novo
+        const refreshResponse = await getUserEnderecos();
+        if (refreshResponse.success && refreshResponse.data.length > 0) {
+          const novosEnderecos = refreshResponse.data;
+          setEnderecos(novosEnderecos);
+          // Auto-selecionar o recém-criado (geralmente o último inserido ou primeiro da lista, então enviamos o recém criado ou o primeiro)
+          const newAddress = novosEnderecos.find(e => e.rua === enderecoData.rua && e.numero === enderecoData.numero) || novosEnderecos[0];
+          onEnderecoSelect(newAddress);
+        } else {
+          await loadEnderecos();
+        }
+        setShowForm(false);
+
+        // Resetar formulário
+        setFormData({
+          cep: "",
+          rua: "",
+          numero: "",
+          bairro: "",
+          cidade: "",
+          estado: "",
+          complemento: "",
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao criar endereço:", error);
+      Toast.show({
+        type: "error",
+        text1: "Erro",
+        text2: "Não foi possível criar o endereço",
+        visibilityTime: 3000,
+      });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCepChange = async (cep) => {
+    const cepFormatado = formatarCep(cep);
+    setFormData({ ...formData, cep: cepFormatado });
+
+    // Se o CEP tem 8 dígitos, buscar automaticamente
+    if (validarCep(cepFormatado)) {
+      setLoadingCep(true);
+
+      try {
+        const resultado = await buscarEnderecoPorCep(cepFormatado);
+
+        if (resultado.success) {
+          // Preencher automaticamente os campos
+          setFormData({
+            ...formData,
+            cep: cepFormatado,
+            rua: resultado.data.rua,
+            bairro: resultado.data.bairro,
+            cidade: resultado.data.cidade,
+            estado: resultado.data.estado,
+          });
+
+          Toast.show({
+            type: "success",
+            text1: "CEP encontrado!",
+            text2: "Endereço preenchido automaticamente",
+            visibilityTime: 2000,
+          });
+        } else {
+          Toast.show({
+            type: "error",
+            text1: "CEP não encontrado",
+            text2: resultado.error || "Verifique o CEP digitado",
+            visibilityTime: 3000,
+          });
+        }
+      } catch (error) {
+        Toast.show({
+          type: "error",
+          text1: "Erro ao buscar CEP",
+          text2: "Tente novamente mais tarde",
+          visibilityTime: 3000,
+        });
+      } finally {
+        setLoadingCep(false);
+      }
+    }
+  };
+
+  const formatEndereco = (endereco) => {
+    const cepFormatado = endereco.cep
+      ? ` - CEP: ${formatarCep(endereco.cep)}`
+      : "";
+    return `${endereco.rua}, ${endereco.numero}${
+      endereco.complemento ? `, ${endereco.complemento}` : ""
+    } - ${endereco.bairro}, ${endereco.cidade}/${
+      endereco.estado
+    }${cepFormatado}`;
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <MaterialIcons
+            name="location-on"
+            size={20}
+            color={theme.colors.primary}
+          />
+          <Text style={styles.headerTitle}>Endereço de Entrega</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Carregando endereços...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <MaterialIcons
+          name="location-on"
+          size={20}
+          color={theme.colors.primary}
+        />
+        <Text style={styles.headerTitle}>Endereço de Entrega</Text>
+        {enderecos.length > 0 && !showForm && (
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setShowForm(true)}
+          >
+            <MaterialIcons name="add" size={20} color={theme.colors.primary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {!showForm && enderecos.length > 0 ? (
+        <View style={styles.enderecosList}>
+          {enderecos.map((endereco) => (
+            <TouchableOpacity
+              key={endereco.endereco_id}
+              style={[
+                styles.enderecoItem,
+                selectedEnderecoId === endereco.endereco_id &&
+                  styles.enderecoItemSelected,
+              ]}
+              onPress={() => onEnderecoSelect(endereco)}
+            >
+              <View style={styles.enderecoContent}>
+                <MaterialIcons
+                  name="home"
+                  size={16}
+                  color={
+                    selectedEnderecoId === endereco.endereco_id
+                      ? theme.colors.primary
+                      : "#666"
+                  }
+                />
+                <Text
+                  style={[
+                    styles.enderecoText,
+                    selectedEnderecoId === endereco.endereco_id &&
+                      styles.enderecoTextSelected,
+                  ]}
+                >
+                  {formatEndereco(endereco)}
+                </Text>
+              </View>
+              {selectedEnderecoId === endereco.endereco_id && (
+                <MaterialIcons
+                  name="check-circle"
+                  size={20}
+                  color={theme.colors.primary}
+                />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.formContainer}>
+          {enderecos.length > 0 && (
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setShowForm(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancelar</Text>
+            </TouchableOpacity>
+          )}
+
+          <Text style={styles.formTitle}>Adicionar Novo Endereço</Text>
+
+          {/* CEP Input */}
+          <View style={styles.cepContainer}>
+            <TextInput
+              style={[styles.input, styles.cepInput]}
+              placeholder="CEP *"
+              placeholderTextColor={isDark ? "#777" : "#999"}
+              value={formData.cep}
+              onChangeText={handleCepChange}
+              keyboardType="numeric"
+              maxLength={9} // 00000-000
+            />
+            {loadingCep && (
+              <View style={styles.cepLoading}>
+                <ActivityIndicator size="small" color={theme.colors.primary || "#7C4DFF"} />
+              </View>
+            )}
+          </View>
+
+          <View style={styles.inputRow}>
+            <TextInput
+              style={[
+                styles.input,
+                styles.inputFlex,
+                loadingCep && styles.inputDisabled,
+              ]}
+              placeholder="Rua *"
+              placeholderTextColor={isDark ? "#777" : "#999"}
+              value={formData.rua}
+              onChangeText={(text) => setFormData({ ...formData, rua: text })}
+              editable={!loadingCep}
+            />
+            <TextInput
+              style={[
+                styles.input,
+                styles.inputSmall,
+                loadingCep && styles.inputDisabled,
+              ]}
+              placeholder="Nº *"
+              placeholderTextColor={isDark ? "#777" : "#999"}
+              value={formData.numero}
+              onChangeText={(text) =>
+                setFormData({
+                  ...formData,
+                  numero: text.replace(/[^0-9]/g, ""),
+                })
+              }
+              keyboardType="numeric"
+              editable={!loadingCep}
+            />
+          </View>
+
+          <TextInput
+            style={[styles.input, loadingCep && styles.inputDisabled]}
+            placeholder="Complemento (opcional)"
+            placeholderTextColor={isDark ? "#777" : "#999"}
+            value={formData.complemento}
+            onChangeText={(text) =>
+              setFormData({ ...formData, complemento: text })
+            }
+            editable={!loadingCep}
+          />
+
+          <TextInput
+            style={[styles.input, loadingCep && styles.inputDisabled]}
+            placeholder="Bairro *"
+            placeholderTextColor={isDark ? "#777" : "#999"}
+            value={formData.bairro}
+            onChangeText={(text) => setFormData({ ...formData, bairro: text })}
+            editable={!loadingCep}
+          />
+
+          <View style={styles.inputRow}>
+            <TextInput
+              style={[
+                styles.input,
+                styles.inputFlex,
+                loadingCep && styles.inputDisabled,
+              ]}
+              placeholder="Cidade *"
+              placeholderTextColor={isDark ? "#777" : "#999"}
+              value={formData.cidade}
+              onChangeText={(text) =>
+                setFormData({ ...formData, cidade: text })
+              }
+              editable={!loadingCep}
+            />
+            <TextInput
+              style={[
+                styles.input,
+                styles.inputSmall,
+                loadingCep && styles.inputDisabled,
+              ]}
+              placeholder="UF *"
+              placeholderTextColor={isDark ? "#777" : "#999"}
+              value={formData.estado}
+              onChangeText={(text) =>
+                setFormData({
+                  ...formData,
+                  estado: text.toUpperCase().slice(0, 2),
+                })
+              }
+              maxLength={2}
+              autoCapitalize="characters"
+              editable={!loadingCep}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.createButton,
+              creating && styles.createButtonDisabled,
+            ]}
+            onPress={handleCreateEndereco}
+            disabled={creating}
+          >
+            {creating ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <>
+                <MaterialIcons name="add-location" size={20} color="white" />
+                <Text style={styles.createButtonText}>Salvar Endereço</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const getStyles = (theme, isDark) => StyleSheet.create({
+  container: {
+    backgroundColor: isDark ? "#1A1A1E" : "white",
+    marginHorizontal: 12,
+    marginVertical: 6,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: isDark ? "#282830" : "rgba(0,0,0,0.06)",
+    shadowColor: isDark ? "#000" : "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: isDark ? 0.3 : 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: isDark ? "#FFFFFF" : theme.colors.foreground,
+    marginLeft: 8,
+    flex: 1,
+  },
+  addButton: {
+    padding: 6,
+    borderRadius: 14,
+    backgroundColor: isDark ? "rgba(124, 77, 255, 0.15)" : "rgba(124, 77, 255, 0.08)",
+  },
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 20,
+  },
+  loadingText: {
+    marginLeft: 8,
+    color: isDark ? "#8A8A90" : "#6B7280",
+  },
+  enderecosList: {
+    gap: 10,
+  },
+  enderecoItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderWidth: 1,
+    borderColor: isDark ? "#2A2A32" : "#e0e0e0",
+    borderRadius: 10,
+    backgroundColor: isDark ? "#121214" : "#f9f9f9",
+  },
+  enderecoItemSelected: {
+    borderColor: theme.colors.primary || "#7C4DFF",
+    backgroundColor: isDark ? "rgba(124, 77, 255, 0.15)" : "rgba(124, 77, 255, 0.08)",
+  },
+  enderecoContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  enderecoText: {
+    fontSize: 14,
+    color: isDark ? "#E0E0E5" : theme.colors.foreground,
+    marginLeft: 8,
+    flex: 1,
+  },
+  enderecoTextSelected: {
+    color: theme.colors.primary || "#7C4DFF",
+    fontWeight: "600",
+  },
+  formContainer: {
+    gap: 12,
+  },
+  cancelButton: {
+    alignSelf: "flex-end",
+    padding: 8,
+  },
+  cancelButtonText: {
+    color: theme.colors.primary || "#7C4DFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  formTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: isDark ? "#FFFFFF" : theme.colors.foreground,
+    marginBottom: 8,
+  },
+  inputRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: isDark ? "#2A2A32" : "#e0e0e0",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    backgroundColor: isDark ? "#121214" : "white",
+    color: isDark ? "#FFFFFF" : "#1A1A1A",
+  },
+  inputDisabled: {
+    backgroundColor: isDark ? "#18181C" : "#f5f5f5",
+    color: isDark ? "#777" : "#999",
+  },
+  inputFlex: {
+    flex: 1,
+  },
+  inputSmall: {
+    width: 80,
+  },
+  cepContainer: {
+    position: "relative",
+    marginBottom: 4,
+  },
+  cepInput: {
+    paddingRight: 40,
+  },
+  cepLoading: {
+    position: "absolute",
+    right: 12,
+    top: 12,
+  },
+  createButton: {
+    backgroundColor: theme.colors.primary || "#7C4DFF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  createButtonDisabled: {
+    opacity: 0.7,
+  },
+  createButtonText: {
+    color: "white",
+    fontSize: 15,
+    fontWeight: "700",
+    marginLeft: 8,
+  },
+});
