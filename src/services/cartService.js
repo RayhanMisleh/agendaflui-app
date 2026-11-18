@@ -24,6 +24,19 @@ function notify(slug) {
   }
 }
 
+// Alterações do mesmo carrinho entram numa fila: ler, mudar e gravar de dois toques rápidos não se atropelam.
+const queues = new Map();
+function enqueue(key, task) {
+  const previous = queues.get(key) || Promise.resolve();
+  const run = previous.then(task, task);
+  const tail = run.catch(() => {});
+  queues.set(key, tail);
+  tail.then(() => {
+    if (queues.get(key) === tail) queues.delete(key);
+  });
+  return run;
+}
+
 function whole(value) {
   const n = Math.trunc(Number(value));
   return Number.isFinite(n) ? n : 0;
@@ -84,43 +97,45 @@ export function createCart(storage, slug) {
     return items;
   }
 
+  // Soma à quantidade que já está no carrinho, até o máximo do produto. Esgotado não entra.
+  async function addNow(product, quantity) {
+    const qty = whole(quantity);
+    const fresh = toItem(product, qty);
+    if (qty < 1 || fresh.maxQuantity < 1 || !fresh.productId) return read();
+    const items = await read();
+    const index = items.findIndex((item) => item.productId === fresh.productId);
+    if (index === -1) {
+      items.push({ ...fresh, quantity: Math.min(qty, fresh.maxQuantity) });
+    } else {
+      items[index] = { ...fresh, quantity: Math.min(items[index].quantity + qty, fresh.maxQuantity) };
+    }
+    return write(items);
+  }
+
+  // 0 ou menos remove; mais que o máximo fica no máximo.
+  async function setQuantityNow(productId, quantity) {
+    const qty = whole(quantity);
+    const items = await read();
+    const index = items.findIndex((item) => item.productId === productId);
+    if (index === -1) return items;
+    if (qty < 1) items.splice(index, 1);
+    else items[index] = { ...items[index], quantity: Math.min(qty, items[index].maxQuantity) };
+    return write(items);
+  }
+
+  async function removeNow(productId) {
+    const items = await read();
+    return write(items.filter((item) => item.productId !== productId));
+  }
+
   return {
     items: read,
-
-    // Soma à quantidade que já está no carrinho, até o máximo do produto. Esgotado não entra.
-    async add(product, quantity = 1) {
-      const qty = whole(quantity);
-      const fresh = toItem(product, qty);
-      if (qty < 1 || fresh.maxQuantity < 1 || !fresh.productId) return read();
-      const items = await read();
-      const index = items.findIndex((item) => item.productId === fresh.productId);
-      if (index === -1) {
-        items.push({ ...fresh, quantity: Math.min(qty, fresh.maxQuantity) });
-      } else {
-        items[index] = { ...fresh, quantity: Math.min(items[index].quantity + qty, fresh.maxQuantity) };
-      }
-      return write(items);
-    },
-
-    // 0 ou menos remove; mais que o máximo fica no máximo.
-    async setQuantity(productId, quantity) {
-      const qty = whole(quantity);
-      const items = await read();
-      const index = items.findIndex((item) => item.productId === productId);
-      if (index === -1) return items;
-      if (qty < 1) items.splice(index, 1);
-      else items[index] = { ...items[index], quantity: Math.min(qty, items[index].maxQuantity) };
-      return write(items);
-    },
-
-    async remove(productId) {
-      const items = await read();
-      return write(items.filter((item) => item.productId !== productId));
-    },
-
-    async clear() {
+    add: (product, quantity = 1) => enqueue(key, () => addNow(product, quantity)),
+    setQuantity: (productId, quantity) => enqueue(key, () => setQuantityNow(productId, quantity)),
+    remove: (productId) => enqueue(key, () => removeNow(productId)),
+    clear: () => enqueue(key, async () => {
       await write([]);
-    },
+    }),
 
     async count() {
       return (await read()).reduce((sum, item) => sum + item.quantity, 0);
@@ -135,6 +150,8 @@ export function createCart(storage, slug) {
 
 export async function clearCartFor(storage, slug) {
   if (typeof slug !== "string" || slug === "") return;
-  await storage.removeItem(cartKey(slug));
-  notify(slug);
+  await enqueue(cartKey(slug), async () => {
+    await storage.removeItem(cartKey(slug));
+    notify(slug);
+  });
 }

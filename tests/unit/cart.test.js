@@ -118,3 +118,15 @@ describe("carrinho por loja", () => {
     );
   });
 });
+
+describe("toques rápidos", () => {
+  test("várias alterações em seguida não se perdem", async () => {
+    const storage = memoryStorage();
+    const cart = createCart(storage, "patas");
+    await cart.add(brinquedo, 1);
+    await Promise.all([cart.setQuantity("p2", 4), cart.add(racao, 1), cart.add(brinquedo, 2)]);
+    const items = await createCart(storage, "patas").items();
+    expect(items.find((i) => i.productId === "p2").quantity).toBe(6);
+    expect(items.find((i) => i.productId === "p1").quantity).toBe(1);
+  });
+});

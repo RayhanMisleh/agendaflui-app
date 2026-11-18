@@ -14,6 +14,9 @@ import { ApiError } from "../../src/api/errors";
 
 const plain = (text) => text.replace(/[  ]/g, " ");
 
+let mockUuid = 0;
+jest.mock("expo-crypto", () => ({ randomUUID: () => `uuid-${++mockUuid}` }));
+
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({ type: "dismiss" })) }));
 
 describe("linhas e entrega", () => {
@@ -194,8 +197,25 @@ describe("envio do pedido", () => {
     expect(send.mock.calls[0][0]).toEqual({ lines, delivery: pickup, note: "tocar a campainha" });
   });
 
-  test("há chaves de pedido da sessão do app", () => {
-    expect(typeof orderKeys.keyFor).toBe("function");
+  test("a chave sobrevive à tela: remontar manda a mesma chave; carrinho ou cotação diferentes mandam outra", async () => {
+    const sent = [];
+    const failing = async (body, key) => {
+      sent.push(key);
+      throw new ApiError("Sem conexão.", { status: 0, code: "network" });
+    };
+    const quoteA = { method: "SHIPPING", addressId: "a1", quoteToken: "cotacao-A" };
+    const quoteB = { method: "SHIPPING", addressId: "a1", quoteToken: "cotacao-B" };
+    const cart = [{ productId: "persist-1", quantity: 1 }];
+    const biggerCart = [{ productId: "persist-1", quantity: 2 }];
+
+    // sem `keys`: usa as chaves de módulo, as mesmas de toda tela
+    await createOrderSubmitter({ send: failing }).submit({ lines: cart, delivery: quoteA }).catch(() => {});
+    await createOrderSubmitter({ send: failing }).submit({ lines: cart, delivery: quoteA }).catch(() => {}); // tela remontada
+    expect(sent[1]).toBe(sent[0]);
+
+    await createOrderSubmitter({ send: failing }).submit({ lines: biggerCart, delivery: quoteA }).catch(() => {});
+    await createOrderSubmitter({ send: failing }).submit({ lines: cart, delivery: quoteB }).catch(() => {});
+    expect(new Set(sent).size).toBe(3);
   });
 });
 

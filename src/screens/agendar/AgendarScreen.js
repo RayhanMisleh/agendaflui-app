@@ -48,6 +48,8 @@ const AgendarScreen = ({ navigation }) => {
   const terms = useTerms();
   const keys = useRef(createIdempotencyKeys()).current;
   const scrollRef = useRef(null);
+  const accountTurn = useRef(0);
+  const confirming = useRef(false);
   const daysRequest = useRef(0);
   const slotsRequest = useRef(0);
 
@@ -114,7 +116,9 @@ const AgendarScreen = ({ navigation }) => {
       setNext(null);
       return;
     }
+    const turn = accountTurn.current;
     const [profile, upcoming] = await Promise.all([getMe().catch(() => null), fetchNextAppointment().catch(() => null), loadBalance()]);
+    if (turn !== accountTurn.current) return; // a pessoa saiu ou trocou de loja enquanto a resposta vinha
     setMe(profile);
     setNext(upcoming);
   }, [isAuthenticated, loadBalance]);
@@ -135,6 +139,7 @@ const AgendarScreen = ({ navigation }) => {
   // Outra loja ou outra sessão: começa do zero (nada de uma loja aparece na outra).
   useEffect(() => {
     let cancelled = false;
+    accountTurn.current += 1;
     resetSelection();
     setNext(null);
     setMe(null);
@@ -267,8 +272,9 @@ const AgendarScreen = ({ navigation }) => {
       navigation.navigate("Login");
       return;
     }
-    if (!professionalId || !serviceId || !slot || submitting) return;
+    if (!professionalId || !serviceId || !slot || submitting || confirming.current) return;
 
+    confirming.current = true;
     setSubmitting(true);
     const wasRescheduling = Boolean(rescheduling);
     let signature = null;
@@ -298,6 +304,7 @@ const AgendarScreen = ({ navigation }) => {
         notify("Não deu para agendar", error.message);
       }
     } finally {
+      confirming.current = false;
       setSubmitting(false);
     }
   };

@@ -7,6 +7,7 @@ import FormMessage from "../components/entry/FormMessage";
 import Button from "../components/ui/Button";
 import { useAuth } from "../components/AuthProvider";
 import { deleteAccount } from "../api/me";
+import { deleteAccountFlow } from "../services/accountDeletion";
 import { unregisterDevice } from "../services/notificationService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useBusiness } from "../business/BusinessProvider";
@@ -34,10 +35,13 @@ export default function ConfirmarExclusaoScreen({ navigation }) {
     setError("");
     setLoading(true);
     try {
-      await unregisterDevice();
-      await deleteAccount(password);
-      await endSession();
-      await clearCartFor(AsyncStorage, slug).catch(() => {});
+      await deleteAccountFlow({
+        password,
+        deleteAccount,
+        unregisterDevice,
+        endSession,
+        clearCart: () => clearCartFor(AsyncStorage, slug),
+      });
       Toast.show({ type: "success", text1: "Sua conta foi excluída.", visibilityTime: 4000 });
       // Na web volta para a Intro; no celular, para a aba Agendar.
       navigation.reset({ index: 0, routes: [{ name: Platform.OS === "web" ? "Intro" : "Navigator" }] });

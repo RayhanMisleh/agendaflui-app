@@ -1,6 +1,9 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api, sessionTokens, setSessionHandlers } from "../api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useBusiness } from "../business/BusinessProvider";
+import { clearCartFor } from "../services/cartService";
+import { createSessionEndHandler } from "../session/sessionEnd";
 
 const AuthContext = createContext();
 
@@ -31,10 +34,16 @@ export const AuthProvider = ({ children }) => {
     };
   }, [slug]);
 
-  // A renovação falhou: o cliente da API já apagou os tokens; aqui só a tela volta a visitante.
+  // A renovação falhou: o cliente da API já apagou os tokens; aqui a tela volta a visitante e o carrinho da loja é limpo.
+  const slugRef = useRef(slug);
+  slugRef.current = slug;
   useEffect(() => {
     setSessionHandlers({
-      onSessionEnded: () => setSession((s) => ({ ...s, authenticated: false, customer: null })),
+      onSessionEnded: createSessionEndHandler({
+        getSlug: () => slugRef.current,
+        clearCart: (cartSlug) => clearCartFor(AsyncStorage, cartSlug),
+        showGuest: () => setSession((s) => ({ ...s, authenticated: false, customer: null })),
+      }),
     });
   }, []);
 

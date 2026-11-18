@@ -12,6 +12,7 @@ import { useTheme } from "../utils/ThemeContext";
 import { getOrder, cancelOrder, startCheckout } from "../api/store";
 import { formatCents, addressLine, checkoutReturnUrl, shippingDaysLabel } from "../store/order";
 import { openCheckout } from "../store/checkout";
+import { useRefreshOnActive } from "../utils/useRefreshOnActive";
 import { fonts, radius, type } from "../theme/tokens";
 
 function Row({ label, value, strong, c }) {
@@ -36,18 +37,31 @@ const PedidoDetalhesScreen = ({ route, navigation }) => {
   const [canceling, setCanceling] = useState(false);
   const [message, setMessage] = useState("");
   const busy = useRef(false);
+  const inFlight = useRef(null);
+  const turn = useRef(0);
 
+  // Uma busca por vez para o mesmo pedido (abrir a tela e o foco inicial pedem juntos); resposta de busca antiga não vale.
   const load = useCallback(
-    async ({ pull = false } = {}) => {
+    ({ pull = false } = {}) => {
+      if (inFlight.current && inFlight.current.orderId === orderId) return inFlight.current.promise;
+      const mine = ++turn.current;
       if (pull) setRefreshing(true);
       setFailed(null);
-      try {
-        setOrder(await getOrder(orderId));
-      } catch (error) {
-        setFailed(error.message);
-      } finally {
-        setRefreshing(false);
-      }
+      const promise = (async () => {
+        try {
+          const found = await getOrder(orderId);
+          if (mine === turn.current) setOrder(found);
+        } catch (error) {
+          if (mine === turn.current) setFailed(error.message);
+        } finally {
+          if (mine === turn.current) {
+            setRefreshing(false);
+            inFlight.current = null;
+          }
+        }
+      })();
+      inFlight.current = { orderId, promise };
+      return promise;
     },
     [orderId]
   );
@@ -55,10 +69,14 @@ const PedidoDetalhesScreen = ({ route, navigation }) => {
   // Busca ao abrir e a cada volta à tela: depois do pagamento o pedido pode ter mudado de situação.
   useEffect(() => {
     setOrder(null);
+    inFlight.current = null;
     load();
     const unsubscribe = navigation.addListener("focus", () => load({ pull: true }));
     return unsubscribe;
   }, [orderId, slug, load, navigation]);
+
+  // No Android o navegador do pagamento fecha sem a tela perder o foco: ao voltar ao app, busca de novo.
+  useRefreshOnActive(() => load({ pull: true }), () => navigation.isFocused());
 
   const back = () => {
     if (navigation.canGoBack()) navigation.goBack();

@@ -9,6 +9,7 @@ import { useBusiness } from "../business/BusinessProvider";
 import { useTheme } from "../utils/ThemeContext";
 import { listOrders } from "../api/store";
 import { formatCents } from "../store/order";
+import { useRefreshOnActive } from "../utils/useRefreshOnActive";
 import { fonts, radius, type } from "../theme/tokens";
 
 const MeusPedidosScreen = ({ navigation }) => {
@@ -52,6 +53,8 @@ const MeusPedidosScreen = ({ navigation }) => {
     const unsubscribe = navigation.addListener("focus", () => load({ pull: true }));
     return unsubscribe;
   }, [slug, load, navigation]);
+
+  useRefreshOnActive(() => load({ pull: true }), () => navigation.isFocused());
 
   const loadMore = async () => {
     if (!cursor || loadingMore) return;
