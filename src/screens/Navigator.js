@@ -19,7 +19,6 @@ import AppointmentSuccessScreen from "./AppointmentSuccessScreen";
 import HistoricoAgendamentosScreen from "./HistoricoAgendamentosScreen";
 import AlterarSenhaScreen from "./AlterarSenhaScreen";
 import MeusPedidosStack from "./MeusPedidosStack";
-import PrizeScannerScreen from "./PrizeScannerScreen";
 import RedemptionSuccessScreen from "./RedemptionSuccessScreen";
 import MinhaJornadaScreen from "./MinhaJornadaScreen";
 import ProductsStack from "./ProductsStack";
@@ -141,11 +140,6 @@ const Navigator = () => {
           <Stack.Screen
             name={ROUTES.Carrinho}
             component={CarrinhoScreen}
-          />
-          <Stack.Screen
-            name={ROUTES.PrizeScanner}
-            component={PrizeScannerScreen}
-            options={{ presentation: "modal" }}
           />
           <Stack.Screen
             name={ROUTES.RedemptionSuccess}

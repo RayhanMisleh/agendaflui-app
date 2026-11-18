@@ -29,7 +29,7 @@ describe("manifesto de rotas", () => {
     expect(TAB_ROUTES).toEqual(["Agendar", "Loja", "Perfil"]);
     expect(MAIN_STACK_ROUTES).toEqual([
       "MainTabs", "AppointmentSuccess", "HistoricoAgendamentos", "AlterarSenha",
-      "MeusPedidos", "Carrinho", "PrizeScanner", "RedemptionSuccess", "MinhaJornada",
+      "MeusPedidos", "Carrinho", "RedemptionSuccess", "MinhaJornada",
     ]);
     expect(PRODUCTS_STACK_ROUTES).toEqual(["ProductsList", "SingleProduct"]);
     expect(ORDERS_STACK_ROUTES).toEqual(["MeusPedidosList", "PedidoDetalhes"]);
@@ -41,7 +41,7 @@ describe("manifesto de rotas", () => {
       "CodigoLoja", "Intro", "Navigator", "Login", "SignUp", "RecuperarSenha",
       "NewUserEmailCode", "ConfirmarExclusao", "MainTabs", "Agendar", "Loja",
       "Perfil", "AppointmentSuccess", "HistoricoAgendamentos", "AlterarSenha",
-      "MeusPedidos", "Carrinho", "PrizeScanner", "RedemptionSuccess", "MinhaJornada",
+      "MeusPedidos", "Carrinho", "RedemptionSuccess", "MinhaJornada",
       "ProductsList", "SingleProduct", "MeusPedidosList", "PedidoDetalhes",
     ]);
     for (const [key, value] of Object.entries(ROUTES)) expect(value).toBe(key);

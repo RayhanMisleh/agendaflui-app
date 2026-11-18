@@ -1,153 +1,99 @@
-import React, { useState, useRef, useEffect } from "react";
-import { View, StyleSheet, Image, TouchableOpacity, Animated, Alert, Linking, Dimensions } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { View, StyleSheet, Image, TouchableOpacity, Animated, Linking, Dimensions } from "react-native";
 import { useTheme } from "../../utils/ThemeContext";
-import { getBanners } from "../../api/legado";
+import { listBanners } from "../../api/banners";
+import { notify } from "../../utils/dialog";
+import { radius } from "../../theme/tokens";
 
-// Movido de AgendarScreen sem reescrever (a Tarefa 5 refaz com /v1/banners).
 const { width } = Dimensions.get("window");
 
-const Banners = () => {
+// Só endereço https:// abre no navegador; rota do app (por exemplo /servicos) não leva a lugar nenhum.
+function isWebLink(url) {
+  return typeof url === "string" && /^https?:\/\//i.test(url);
+}
+
+// Carrossel dos banners no ar hoje. Sem banner, sem módulo ou com falha: a seção some, sem erro na tela.
+const Banners = ({ reloadKey = 0 }) => {
   const { theme } = useTheme();
-  const BANNER_WIDTH = theme.isTablet ? width - 80 : width - 48;
-  const styles = getStyles(theme);
+  const c = theme.colors;
+  const bannerWidth = theme.isTablet ? width - 80 : width - 48;
   const scrollX = useRef(new Animated.Value(0)).current;
   const [banners, setBanners] = useState([]);
 
   useEffect(() => {
-    getBanners()
-      .then((data) => setBanners(data || []))
-      .catch(() => setBanners([]));
-  }, []);
+    let cancelled = false;
+    listBanners()
+      .then((items) => {
+        if (!cancelled) setBanners(Array.isArray(items) ? items.filter((b) => b && b.imageUrl) : []);
+      })
+      .catch(() => {
+        if (!cancelled) setBanners([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  if (banners.length === 0) return null;
+
+  const open = (url) => {
+    Linking.openURL(url).catch(() => notify("Não deu para abrir o link"));
+  };
+
+  const range = (index) => [(index - 1) * bannerWidth, index * bannerWidth, (index + 1) * bannerWidth];
 
   const renderBanner = ({ item, index }) => {
-    const inputRange = [
-      (index - 1) * BANNER_WIDTH,
-      index * BANNER_WIDTH,
-      (index + 1) * BANNER_WIDTH,
-    ];
-    const scale = scrollX.interpolate({
-      inputRange,
-      outputRange: [0.95, 1, 0.95],
-      extrapolate: "clamp",
-    });
-
+    const scale = scrollX.interpolate({ inputRange: range(index), outputRange: [0.95, 1, 0.95], extrapolate: "clamp" });
+    const linked = isWebLink(item.linkUrl);
     return (
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={() => {
-          if (item.redirect_url) {
-            Linking.openURL(item.redirect_url).catch(() => {
-              Alert.alert("Erro", "Não foi possível abrir o link.");
-            });
-          }
-        }}
-        style={[styles.bannerContainer, { transform: [{ scale }] }]}
-      >
-        <Image
-          source={{ uri: item.image_url }}
-          style={styles.bannerImage}
-          resizeMode="cover"
-        />
-        {/* Remover overlay de texto para banners profissionais que já vêm com arte */}
-      </TouchableOpacity>
+      <Animated.View style={[styles.banner, { width: bannerWidth, height: theme.isTablet ? 350 : 160, borderColor: c.line, transform: [{ scale }] }]}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          disabled={!linked}
+          onPress={() => open(item.linkUrl)}
+          accessibilityRole={linked ? "link" : "image"}
+          accessibilityLabel={item.title}
+          style={styles.fill}
+        >
+          <Image source={{ uri: item.imageUrl }} style={styles.fill} resizeMode="cover" />
+        </TouchableOpacity>
+      </Animated.View>
     );
   };
 
-
   return (
-    <>
-        {banners.length > 0 && (
-          <View style={[styles.bannersSection, { marginBottom: 0 }]}>
-            <Animated.FlatList
-              data={banners}
-              renderItem={renderBanner}
-              keyExtractor={(item) => String(item.banner_id || item.id)}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              pagingEnabled
-              snapToInterval={BANNER_WIDTH + 16}
-              decelerationRate="fast"
-              contentContainerStyle={styles.bannerList}
-              onScroll={Animated.event(
-                [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-                { useNativeDriver: true },
-              )}
-            />
-            {/* Indicadores */}
-            <View style={styles.indicators}>
-              {banners.map((_, index) => {
-                const inputRange = [
-                  (index - 1) * BANNER_WIDTH,
-                  index * BANNER_WIDTH,
-                  (index + 1) * BANNER_WIDTH,
-                ];
-                const opacity = scrollX.interpolate({
-                  inputRange,
-                  outputRange: [0.3, 1, 0.3],
-                  extrapolate: "clamp",
-                });
-                return (
-                  <Animated.View
-                    key={index}
-                    style={[styles.indicator, { opacity }]}
-                  />
-                );
-              })}
-            </View>
-          </View>
-        )}
-    </>
+    <View style={styles.section}>
+      <Animated.FlatList
+        data={banners}
+        renderItem={renderBanner}
+        keyExtractor={(item) => item.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        pagingEnabled
+        snapToInterval={bannerWidth + 16}
+        decelerationRate="fast"
+        contentContainerStyle={styles.list}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
+      />
+      {banners.length > 1 ? (
+        <View style={styles.indicators}>
+          {banners.map((banner, index) => {
+            const opacity = scrollX.interpolate({ inputRange: range(index), outputRange: [0.3, 1, 0.3], extrapolate: "clamp" });
+            return <Animated.View key={banner.id} style={[styles.indicator, { backgroundColor: c.brand, opacity }]} />;
+          })}
+        </View>
+      ) : null}
+    </View>
   );
 };
 
-const getStyles = (theme) => {
-  const BANNER_WIDTH = theme.isTablet ? width - 80 : width - 48;
-  return StyleSheet.create({
-    bannersSection: {
-      marginBottom: 32,
-    },
-    bannerList: {
-      paddingHorizontal: 24,
-    },
-    bannerContainer: {
-      width: BANNER_WIDTH,
-      height: theme.isTablet ? 350 : 160,
-      marginRight: 16,
-      borderRadius: theme.borderRadius.lg,
-      overflow: "hidden",
-    },
-    bannerImage: {
-      width: "100%",
-      height: "100%",
-    },
-    bannerOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      justifyContent: "flex-end",
-      padding: 20,
-    },
-    bannerTitle: {
-      fontSize: 20,
-      fontWeight: "700",
-      color: "#FFF",
-    },
-    bannerSubtitle: {
-      fontSize: 14,
-      color: "rgba(255,255,255,0.9)",
-      marginTop: 4,
-    },
-    indicators: {
-      flexDirection: "row",
-      justifyContent: "center",
-      marginTop: 12,
-    },
-    indicator: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: theme.colors.primary,
-      marginHorizontal: 4,
-    },
-  });
-};
+const styles = StyleSheet.create({
+  section: { marginBottom: 8 },
+  list: { paddingHorizontal: 24 },
+  banner: { marginRight: 16, borderRadius: radius.lg, borderWidth: 1, overflow: "hidden" },
+  fill: { width: "100%", height: "100%" },
+  indicators: { flexDirection: "row", justifyContent: "center", marginTop: 12 },
+  indicator: { width: 8, height: 8, borderRadius: 4, marginHorizontal: 4 },
+});
 
 export default Banners;

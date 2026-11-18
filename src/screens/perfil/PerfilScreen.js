@@ -11,6 +11,7 @@ import { useTheme } from "../../utils/ThemeContext";
 import { CartService } from "../../services/cartService";
 import { unregisterDevice } from "../../services/notificationService";
 import { getMe } from "../../api/me";
+import { getMyLoyalty } from "../../api/loyalty";
 import { config } from "../../config";
 import { confirmAction } from "../../utils/dialog";
 import CartaoPerfil from "./CartaoPerfil";
@@ -27,9 +28,12 @@ const PerfilScreen = ({ navigation }) => {
   const { business, slug, switchBusiness } = useBusiness();
   const terms = useTerms();
   const [me, setMe] = useState(null);
+  const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [leaving, setLeaving] = useState(false);
+
+  const loyaltyOn = Boolean(business && business.modules && business.modules.loyalty);
 
   const loadMe = useCallback(async () => {
     try {
@@ -37,10 +41,17 @@ const PerfilScreen = ({ navigation }) => {
     } catch (error) {
       Toast.show({ type: "error", text1: "Não deu para carregar o perfil", text2: error.message });
     }
-  }, []);
+    // Saldo só com o módulo ligado; falha ou módulo desligado = sem saldo no cartão, sem erro.
+    try {
+      setBalance(loyaltyOn ? (await getMyLoyalty()).balance : null);
+    } catch (error) {
+      setBalance(null);
+    }
+  }, [loyaltyOn]);
 
   useEffect(() => {
     setMe(null);
+    setBalance(null);
     if (!isAuthenticated) return;
     setLoading(true);
     loadMe().finally(() => setLoading(false));
@@ -102,14 +113,10 @@ const PerfilScreen = ({ navigation }) => {
           <Skeleton width={200} height={16} />
         </View>
       ) : (
-        <CartaoPerfil me={me} storeName={storeName} club={terms.club} onSaved={setMe} />
+        <CartaoPerfil me={me} storeName={storeName} terms={terms} balance={balance} onSaved={setMe} />
       )}
 
-      {modules.loyalty ? (
-        <Secao title={`Ranking do ${terms.club}`}>
-          <RankingCard isAuthenticated={isAuthenticated} clubMember={Boolean(me && me.isClubMember)} />
-        </Secao>
-      ) : null}
+      {modules.loyalty ? <RankingCard terms={terms} slug={slug} /> : null}
 
       <Secao title="Conta">
         <MenuLista

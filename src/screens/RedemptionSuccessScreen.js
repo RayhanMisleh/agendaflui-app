@@ -1,242 +1,134 @@
-import React, { useEffect, useRef } from "react";
-import PointsIcon from "../components/ui/PointsIcon";
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, Easing } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { View, Text, StyleSheet, Animated, Easing, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { useTheme } from "../utils/ThemeContext";
-import { ScrollView } from "react-native";
+import { useTerms } from "../business/BusinessProvider";
+import { pointsLabel } from "../business/terms";
+import { cancelRedemption } from "../api/loyalty";
+import { confirmAction, notify } from "../utils/dialog";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
+import Icon from "../components/ui/Icon";
+import RedemptionBadge from "../components/ui/RedemptionBadge";
+import { fonts, type } from "../theme/tokens";
 
-const { width } = Dimensions.get("window");
-
+// Recebe { redemption, balance } do resgate feito. O resgate nasce pendente: a pessoa mostra a tela no balcão.
 const RedemptionSuccessScreen = ({ route, navigation }) => {
-  const { prize, redemption } = route.params;
   const insets = useSafeAreaInsets();
-  const { theme, isDarkMode } = useTheme();
-  const styles = getStyles(theme, isDarkMode);
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const terms = useTerms();
+  const [redemption, setRedemption] = useState(route.params ? route.params.redemption : null);
+  const [balance, setBalance] = useState(route.params ? route.params.balance : null);
+  const [canceling, setCanceling] = useState(false);
 
-  const scaleValue = useRef(new Animated.Value(0)).current;
-  const opacityValue = useRef(new Animated.Value(0)).current;
-  const slideValue = useRef(new Animated.Value(50)).current;
+  const scale = useRef(new Animated.Value(0)).current;
+  const fade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.sequence([
-      Animated.timing(scaleValue, {
-        toValue: 1,
-        duration: 400,
-        easing: Easing.out(Easing.back(1.5)),
-        useNativeDriver: true,
-      }),
-      Animated.parallel([
-        Animated.timing(opacityValue, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideValue, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]),
+      Animated.spring(scale, { toValue: 1, friction: 5, tension: 40, useNativeDriver: true }),
+      Animated.timing(fade, { toValue: 1, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [scale, fade]);
 
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    return new Intl.DateTimeFormat('pt-BR', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
-    }).format(date);
+  const canceled = redemption && redemption.status === "CANCELED";
+
+  const cancel = async () => {
+    if (!redemption || canceling) return;
+    const ok = await confirmAction({
+      title: "Cancelar resgate",
+      message: `Quer cancelar o resgate de ${redemption.prize.name}? Seus ${terms.points.plural} voltam.`,
+      confirmText: "Cancelar resgate",
+      cancelText: "Manter resgate",
+      destructive: true,
+    });
+    if (!ok) return;
+    setCanceling(true);
+    try {
+      const updated = await cancelRedemption(redemption.id);
+      setRedemption(updated);
+      if (typeof balance === "number") setBalance(balance + redemption.costPoints);
+    } catch (error) {
+      notify("Não deu para cancelar", error.message);
+    } finally {
+      setCanceling(false);
+    }
   };
 
-  return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+  if (!redemption) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: c.ground }]}>
+        <View style={styles.empty}>
+          <Text style={[styles.title, { color: c.ink }]}>Nada por aqui</Text>
+          <Button title="Voltar ao início" onPress={() => navigation.navigate("MainTabs")} style={{ marginTop: 24 }} />
+        </View>
+      </View>
+    );
+  }
 
-        {/* Animated Checkmark */}
-        <Animated.View style={[styles.checkmarkContainer, { transform: [{ scale: scaleValue }] }]}>
-          <View style={styles.checkmarkCircle}>
-            <MaterialIcons name="card-giftcard" size={48} color="#FFF" />
-          </View>
+  return (
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom, backgroundColor: c.ground }]}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <Animated.View style={[styles.badge, { backgroundColor: canceled ? c.inkMuted : c.brand, transform: [{ scale }] }]}>
+          <Icon name={canceled ? "x" : "gift"} size={48} color={c.onBrand} />
         </Animated.View>
 
-        <Animated.View style={[styles.contentContainer, { opacity: opacityValue, transform: [{ translateY: slideValue }] }]}>
-          <Text style={styles.title}>Prêmio Resgatado!</Text>
-          <Text style={styles.subtitle}>
-            Mostre esta tela no balcão e pegue sua recompensa.
+        <Animated.View style={{ opacity: fade, width: "100%", alignItems: "center" }}>
+          <Text style={[styles.title, { color: c.ink }]}>{canceled ? "Resgate cancelado" : "Resgate feito"}</Text>
+          <Text style={[styles.subtitle, { color: c.inkMuted }]}>
+            {canceled ? `Seus ${terms.points.plural} voltaram.` : "Mostre esta tela no balcão."}
           </Text>
 
-          <Card style={styles.detailsCard}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardHeaderTitle}>Detalhes do Resgate</Text>
-            </View>
+          <Card style={styles.card}>
+            <Text style={[styles.label, { color: c.inkMuted }]}>Prêmio</Text>
+            <Text style={[styles.value, { color: c.ink }]}>{redemption.prize.name}</Text>
 
-            <View style={styles.detailRow}>
-              <View style={styles.detailIconContainer}>
-                <MaterialIcons name="redeem" size={24} color={theme.colors.primary} />
-              </View>
-              <View style={styles.detailTextContainer}>
-                <Text style={styles.detailLabel}>Prêmio</Text>
-                <Text style={styles.detailValue}>{prize.name}</Text>
-              </View>
-            </View>
+            <View style={[styles.divider, { backgroundColor: c.line }]} />
+            <Text style={[styles.label, { color: c.inkMuted }]}>Custo</Text>
+            <Text style={[styles.value, { color: c.ink }]}>{pointsLabel(redemption.costPoints, terms)}</Text>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: c.line }]} />
+            <Text style={[styles.label, { color: c.inkMuted }]}>Resgatado em</Text>
+            <Text style={[styles.value, { color: c.ink }]}>{redemption.createdLabel}</Text>
 
-            <View style={styles.detailRow}>
-              <View style={styles.detailIconContainer}>
-                <MaterialIcons name="monetization-on" size={24} color={theme.colors.primary} />
-              </View>
-              <View style={styles.detailTextContainer}>
-                <Text style={styles.detailLabel}>Custo</Text>
-                <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                  <PointsIcon size={16} />
-                  <Text style={[styles.detailValue, {marginLeft: 4}]}>{prize.points || prize.points_cost} pontos</Text>
-                </View>
-              </View>
-            </View>
+            <View style={[styles.divider, { backgroundColor: c.line }]} />
+            <Text style={[styles.label, { color: c.inkMuted }]}>Situação</Text>
+            <RedemptionBadge status={redemption.status} style={{ marginTop: 6 }} />
 
-            <View style={styles.divider} />
-
-            <View style={styles.detailRow}>
-              <View style={styles.detailIconContainer}>
-                <MaterialIcons name="check-circle" size={24} color={theme.colors.success} />
-              </View>
-              <View style={styles.detailTextContainer}>
-                <Text style={styles.detailLabel}>Data e Hora do Resgate</Text>
-                <Text style={styles.detailValue}>{redemption ? formatDate(redemption.redeemed_at) : formatDate(new Date())}</Text>
-              </View>
-            </View>
-
+            {typeof balance === "number" ? (
+              <>
+                <View style={[styles.divider, { backgroundColor: c.line }]} />
+                <Text style={[styles.label, { color: c.inkMuted }]}>Seu saldo</Text>
+                <Text style={[styles.value, { color: c.ink }]}>{pointsLabel(balance, terms)}</Text>
+              </>
+            ) : null}
           </Card>
-
-          <View style={styles.actionContainer}>
-            <Button
-              title="Voltar para o Início"
-              onPress={() => navigation.navigate("MainTabs")}
-              style={styles.primaryButton}
-            />
-          </View>
         </Animated.View>
       </ScrollView>
+
+      <View style={styles.footer}>
+        {redemption.status === "PENDING" ? (
+          <Button title="Cancelar resgate" variant="outline" onPress={cancel} loading={canceling} fullWidth style={{ marginBottom: 12, borderColor: c.danger }} textStyle={{ color: c.danger }} />
+        ) : null}
+        <Button title="Voltar ao início" onPress={() => navigation.navigate("MainTabs")} fullWidth size="lg" />
+      </View>
     </View>
   );
 };
 
-const getStyles = (theme, isDarkMode) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.backgroundSecondary,
-  },
-  scrollContent: {
-    padding: 24,
-    alignItems: "center",
-    flexGrow: 1,
-  },
-  checkmarkContainer: {
-    marginTop: 40,
-    marginBottom: 32,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  checkmarkCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: theme.colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    ...(isDarkMode ? {} : {
-      shadowColor: theme.colors.primary,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.3,
-      shadowRadius: 16,
-      elevation: 8,
-    }),
-  },
-  contentContainer: {
-    width: "100%",
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: theme.colors.textPrimary,
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-    textAlign: "center",
-    marginBottom: 40,
-    lineHeight: 24,
-    paddingHorizontal: 16,
-  },
-  detailsCard: {
-    width: "100%",
-    padding: 0,
-    overflow: "hidden",
-    marginBottom: 32,
-  },
-  cardHeader: {
-    backgroundColor: theme.colors.backgroundSecondary,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderLight,
-  },
-  cardHeaderTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: theme.colors.textSecondary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-  },
-  detailIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: theme.colors.primary + "15",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 16,
-  },
-  detailTextContainer: {
-    flex: 1,
-  },
-  detailLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: theme.colors.textMuted,
-    marginBottom: 4,
-  },
-  detailValue: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: theme.colors.textPrimary,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: theme.colors.borderLight,
-    marginLeft: 84,
-  },
-  actionContainer: {
-    width: "100%",
-    marginTop: "auto",
-  },
-  primaryButton: {
-    marginBottom: 16,
-  },
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  scroll: { padding: 24, alignItems: "center", flexGrow: 1 },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  badge: { width: 100, height: 100, borderRadius: 50, alignItems: "center", justifyContent: "center", marginTop: 32, marginBottom: 28 },
+  title: { ...type.title, textAlign: "center" },
+  subtitle: { ...type.body, marginTop: 8, textAlign: "center" },
+  card: { width: "100%", marginTop: 28, padding: 18 },
+  label: { ...type.caption },
+  value: { fontFamily: fonts.textBold, fontSize: 17, lineHeight: 24, marginTop: 2 },
+  divider: { height: 1, marginVertical: 12 },
+  footer: { paddingHorizontal: 24, paddingBottom: 24 },
 });
 
 export default RedemptionSuccessScreen;

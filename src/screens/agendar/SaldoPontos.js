@@ -1,32 +1,28 @@
-import React, { useState, useEffect } from "react";
-import { StyleSheet } from "react-native";
-import Card from "../../components/ui/Card";
+import React from "react";
+import { View, StyleSheet } from "react-native";
 import PointsDisplay from "../../components/ui/PointsDisplay";
 import { useTheme } from "../../utils/ThemeContext";
-import { useTerms } from "../../business/BusinessProvider";
-import { getProfile } from "../../api/legado";
+import { pointsLabel, pointsWord } from "../../business/terms";
+import { radius } from "../../theme/tokens";
 
-// Movido de AgendarScreen sem reescrever (a Tarefa 5 refaz com /v1/loyalty/me).
-const SaldoPontos = ({ isAuthenticated }) => {
+// Saldo de pontos no topo do Agendar. `balance` vem de GET /v1/loyalty/me (null: ainda não chegou).
+const SaldoPontos = ({ balance, terms }) => {
   const { theme } = useTheme();
-  const terms = useTerms();
-  const [points, setPoints] = useState(0);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setPoints(0);
-      return;
-    }
-    getProfile()
-      .then((user) => setPoints(user?.user_points_balance ?? 0))
-      .catch(() => {});
-  }, [isAuthenticated]);
-
+  const c = theme.colors;
+  if (balance === null || balance === undefined) return null;
   return (
-    <Card style={{ backgroundColor: theme.colors.pointsBackground }} padding="sm">
-      <PointsDisplay amount={points} label={terms.points.plural} size="md" />
-    </Card>
+    <View
+      style={[styles.box, { backgroundColor: c.carameloTint, borderColor: c.line }]}
+      accessible
+      accessibilityLabel={`Seu saldo: ${pointsLabel(balance, terms)}`}
+    >
+      <PointsDisplay amount={balance} label={pointsWord(balance, terms)} size="lg" />
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  box: { borderWidth: 1, borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 14 },
+});
 
 export default SaldoPontos;

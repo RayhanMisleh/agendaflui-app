@@ -3,7 +3,7 @@ const names = [
   "CodigoLoja", "Intro", "Navigator", "Login", "SignUp", "RecuperarSenha",
   "NewUserEmailCode", "ConfirmarExclusao", "MainTabs", "Agendar", "Loja",
   "Perfil", "AppointmentSuccess", "HistoricoAgendamentos", "AlterarSenha",
-  "MeusPedidos", "Carrinho", "PrizeScanner", "RedemptionSuccess", "MinhaJornada",
+  "MeusPedidos", "Carrinho", "RedemptionSuccess", "MinhaJornada",
   "ProductsList", "SingleProduct", "MeusPedidosList", "PedidoDetalhes",
 ];
 
@@ -11,7 +11,7 @@ export const ROUTES = Object.freeze(Object.fromEntries(names.map((n) => [n, n]))
 
 export const ROOT_ROUTES = ["CodigoLoja", "Intro", "Navigator", "Login", "SignUp", "RecuperarSenha", "NewUserEmailCode", "ConfirmarExclusao"];
 export const TAB_ROUTES = ["Agendar", "Loja", "Perfil"];
-export const MAIN_STACK_ROUTES = ["MainTabs", "AppointmentSuccess", "HistoricoAgendamentos", "AlterarSenha", "MeusPedidos", "Carrinho", "PrizeScanner", "RedemptionSuccess", "MinhaJornada"];
+export const MAIN_STACK_ROUTES = ["MainTabs", "AppointmentSuccess", "HistoricoAgendamentos", "AlterarSenha", "MeusPedidos", "Carrinho", "RedemptionSuccess", "MinhaJornada"];
 export const PRODUCTS_STACK_ROUTES = ["ProductsList", "SingleProduct"];
 export const ORDERS_STACK_ROUTES = ["MeusPedidosList", "PedidoDetalhes"];
 export const BOOKING_STEPS = ["profissional", "servico", "data", "horario"];

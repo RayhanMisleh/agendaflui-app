@@ -16,9 +16,11 @@ import {
   nextAppointment as fetchNextAppointment,
 } from "../../api/agenda";
 import { getMe } from "../../api/me";
+import { getMyLoyalty } from "../../api/loyalty";
 import { ANY_PROFESSIONAL, servicesFor, professionalParam, buildBooking, bookingSignature } from "../../booking/selection";
 import { BOOKING_STEPS } from "../../navigation/routes";
 import { localDateIn, bookingRange } from "../../utils/time";
+import { rewardPointsOf } from "../../loyalty/prizes";
 import { confirmAction, notify } from "../../utils/dialog";
 import { fonts, radius, type } from "../../theme/tokens";
 import Button from "../../components/ui/Button";
@@ -54,6 +56,8 @@ const AgendarScreen = ({ navigation }) => {
   const [services, setServices] = useState([]);
   const [professionals, setProfessionals] = useState([]);
   const [me, setMe] = useState(null);
+  const [balance, setBalance] = useState(null); // saldo de pontos; null: visitante ou ainda não chegou
+  const [reloadKey, setReloadKey] = useState(0); // refaz prêmios e banners
   const [next, setNext] = useState(null);
   const [busy, setBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -72,6 +76,8 @@ const AgendarScreen = ({ navigation }) => {
   const maxAdvanceDays = business && business.rules ? business.rules.maxAdvanceDays : undefined;
   const today = localDateIn(timeZone, new Date());
   const isClubMember = Boolean(me && me.isClubMember);
+  const loyaltyOn = Boolean(business && business.modules && business.modules.loyalty);
+  const bannersOn = Boolean(business && business.modules && business.modules.banners);
 
   const resetSelection = useCallback(() => {
     setProfessionalId(null);
@@ -83,16 +89,35 @@ const AgendarScreen = ({ navigation }) => {
     setRescheduling(null);
   }, []);
 
+  // Saldo (só com o módulo ligado); falha ou módulo desligado deixam sem saldo, sem erro na tela.
+  const loadBalance = useCallback(async () => {
+    if (!isAuthenticated || !loyaltyOn) {
+      setBalance(null);
+      return;
+    }
+    try {
+      const loyalty = await getMyLoyalty();
+      setBalance(loyalty.balance);
+    } catch (error) {
+      setBalance(null);
+    }
+  }, [isAuthenticated, loyaltyOn]);
+
+  const refreshLoyalty = useCallback(() => {
+    setReloadKey((key) => key + 1);
+    loadBalance();
+  }, [loadBalance]);
+
   const loadAccount = useCallback(async () => {
     if (!isAuthenticated) {
       setMe(null);
       setNext(null);
       return;
     }
-    const [profile, upcoming] = await Promise.all([getMe().catch(() => null), fetchNextAppointment().catch(() => null)]);
+    const [profile, upcoming] = await Promise.all([getMe().catch(() => null), fetchNextAppointment().catch(() => null), loadBalance()]);
     setMe(profile);
     setNext(upcoming);
-  }, [isAuthenticated]);
+  }, [isAuthenticated, loadBalance]);
 
   const loadAll = useCallback(async () => {
     try {
@@ -113,6 +138,7 @@ const AgendarScreen = ({ navigation }) => {
     resetSelection();
     setNext(null);
     setMe(null);
+    setBalance(null);
     setLoading(true);
     loadAll().finally(() => {
       if (!cancelled) setLoading(false);
@@ -166,9 +192,18 @@ const AgendarScreen = ({ navigation }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    setReloadKey((key) => key + 1);
     await loadAll();
     setRefreshing(false);
   };
+
+  // Ao voltar de um resgate (ou de outra tela), o saldo e os prêmios se atualizam.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      if (!loading) refreshLoyalty();
+    });
+    return unsubscribe;
+  }, [navigation, loading, refreshLoyalty]);
 
   const scrollDown = () => setTimeout(() => scrollRef.current && scrollRef.current.scrollToEnd({ animated: true }), 200);
 
@@ -252,7 +287,8 @@ const AgendarScreen = ({ navigation }) => {
       }
       setNext(appointment);
       resetSelection();
-      navigation.navigate("AppointmentSuccess", { appointment, isReschedule: wasRescheduling });
+      const rewardPoints = !wasRescheduling && loyaltyOn && service ? rewardPointsOf([service]) : 0;
+      navigation.navigate("AppointmentSuccess", { appointment, isReschedule: wasRescheduling, rewardPoints });
       if (scrollRef.current) scrollRef.current.scrollTo({ y: 0, animated: false });
     } catch (error) {
       if (SLOT_GONE.includes(error.reason)) {
@@ -351,7 +387,7 @@ const AgendarScreen = ({ navigation }) => {
             </Text>
           </View>
           {isAuthenticated ? (
-            <SaldoPontos isAuthenticated={isAuthenticated} />
+            loyaltyOn ? <SaldoPontos balance={balance} terms={terms} /> : null
           ) : (
             <TouchableOpacity style={[styles.login, { backgroundColor: c.brand }]} activeOpacity={0.8} onPress={() => navigation.navigate("Login")}>
               <Text style={[styles.loginText, { color: c.onBrand }]}>Entrar</Text>
@@ -360,8 +396,17 @@ const AgendarScreen = ({ navigation }) => {
           )}
         </View>
 
-        <Banners />
-        <Premios navigation={navigation} isAuthenticated={isAuthenticated} clubMember={isClubMember} />
+        {bannersOn ? <Banners reloadKey={reloadKey} /> : null}
+        {loyaltyOn ? (
+          <Premios
+            navigation={navigation}
+            isAuthenticated={isAuthenticated}
+            balance={isAuthenticated ? balance : null}
+            terms={terms}
+            reloadKey={reloadKey}
+            onChanged={refreshLoyalty}
+          />
+        ) : null}
 
         {next && !rescheduling ? (
           <ProximoHorario appointment={next} busy={busy} onCancel={cancelNext} onReschedule={startReschedule} />

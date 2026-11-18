@@ -7,13 +7,17 @@ import Button from "../components/ui/Button";
 import Avatar from "../components/ui/Avatar";
 import Icon from "../components/ui/Icon";
 import Card from "../components/ui/Card";
-import { fonts, type } from "../theme/tokens";
+import { fonts, radius, type } from "../theme/tokens";
 import { formatDay } from "../utils/time";
 import { formatCents } from "../utils/money";
+import { useBusiness, useTerms } from "../business/BusinessProvider";
+import { pointsLabel } from "../business/terms";
 
 // Recebe o agendamento da v1 (data e hora já vêm no fuso da loja).
 const AppointmentSuccessScreen = ({ navigation }) => {
   const route = useRoute();
+  const { business } = useBusiness();
+  const terms = useTerms();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const c = theme.colors;
@@ -23,6 +27,9 @@ const AppointmentSuccessScreen = ({ navigation }) => {
   const appointment = route.params?.appointment || null;
   const isReschedule = Boolean(route.params?.isReschedule);
   const pending = appointment && appointment.status === "PENDING";
+  // Pontos que o atendimento rende (soma dos serviços, calculada na hora de agendar); só com o módulo ligado.
+  const rewardPoints = Number(route.params?.rewardPoints) || 0;
+  const showReward = Boolean(business && business.modules && business.modules.loyalty) && !isReschedule && rewardPoints > 0;
 
   useEffect(() => {
     Animated.sequence([
@@ -67,6 +74,15 @@ const AppointmentSuccessScreen = ({ navigation }) => {
               </View>
             </Card>
           ) : null}
+
+          {showReward ? (
+            <View style={[styles.reward, { backgroundColor: c.carameloTint, borderColor: c.line }]}>
+              <Icon name="star" size={18} color={c.ink} />
+              <Text style={[styles.rewardText, { color: c.ink }]}>
+                +{pointsLabel(rewardPoints, terms)} quando o atendimento for concluído
+              </Text>
+            </View>
+          ) : null}
         </Animated.View>
       </View>
 
@@ -90,6 +106,8 @@ const styles = StyleSheet.create({
   divider: { height: 1, marginVertical: 6, marginBottom: 14 },
   small: { ...type.small },
   pro: { fontFamily: fonts.textBold, fontSize: 17, lineHeight: 22 },
+  reward: { width: "100%", flexDirection: "row", alignItems: "center", marginTop: 14, padding: 14, borderRadius: radius.lg, borderWidth: 1 },
+  rewardText: { ...type.small, fontFamily: fonts.textSemi, flex: 1, marginLeft: 10 },
   footer: { paddingHorizontal: 24 },
 });
 

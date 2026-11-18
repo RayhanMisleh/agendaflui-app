@@ -1,4 +1,4 @@
-import { DEFAULT_TERMS, termsOf, pointsLabel } from "../../src/business/terms";
+import { DEFAULT_TERMS, termsOf, pointsLabel, pointsWord } from "../../src/business/terms";
 
 describe("termsOf", () => {
   test("sem conta devolve os termos padrão", () => {
@@ -54,5 +54,15 @@ describe("pointsLabel", () => {
 
   test("sem termos usa o padrão", () => {
     expect(pointsLabel(3)).toBe("3 pontos");
+  });
+});
+
+describe("pointsWord", () => {
+  test("singular só para 1 e -1", () => {
+    const pet = { points: { singular: "patinha", plural: "patinhas" } };
+    expect(pointsWord(1, pet)).toBe("patinha");
+    expect(pointsWord(0, pet)).toBe("patinhas");
+    expect(pointsWord(2, pet)).toBe("patinhas");
+    expect(pointsWord(1, undefined)).toBe("ponto");
   });
 });

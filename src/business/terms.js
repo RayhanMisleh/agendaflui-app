@@ -26,10 +26,16 @@ export function termsOf(business) {
   };
 }
 
-// '1 ponto', '0 pontos', '1.250 pontos'.
-export function pointsLabel(n, terms) {
+// A palavra no número certo: 'ponto' para 1, 'pontos' para o resto.
+export function pointsWord(n, terms) {
   const points = (terms && terms.points) || DEFAULT_TERMS.points;
   const value = Math.trunc(Number(n)) || 0;
+  return Math.abs(value) === 1 ? points.singular : points.plural;
+}
+
+// '1 ponto', '0 pontos', '1.250 pontos'.
+export function pointsLabel(n, terms) {
+  const value = Math.trunc(Number(n)) || 0;
   const grouped = String(Math.abs(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return `${value < 0 ? "-" : ""}${grouped} ${Math.abs(value) === 1 ? points.singular : points.plural}`;
+  return `${value < 0 ? "-" : ""}${grouped} ${pointsWord(value, terms)}`;
 }
