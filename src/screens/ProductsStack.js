@@ -1,5 +1,6 @@
 import React from "react";
 import { createStackNavigator } from "@react-navigation/stack";
+import { ROUTES } from "../navigation/routes";
 import ProductsScreen from "./ProductsScreen";
 import SingleProductScreen from "./SingleProductScreen";
 import CustomHeader from "../components/CustomHeader";
@@ -14,7 +15,7 @@ const ProductsStack = () => {
       }}
     >
       <Stack.Screen
-        name="ProductsList"
+        name={ROUTES.ProductsList}
         component={ProductsScreen}
         options={{
           headerShown: true,
@@ -22,7 +23,7 @@ const ProductsStack = () => {
         }}
       />
       <Stack.Screen
-        name="SingleProduct"
+        name={ROUTES.SingleProduct}
         component={SingleProductScreen}
         options={{
           headerShown: true,

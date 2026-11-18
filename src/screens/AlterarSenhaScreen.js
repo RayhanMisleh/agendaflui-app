@@ -48,7 +48,7 @@ export default function AlterarSenhaScreen({ navigation }) {
 
     if (newPassword !== confirmPassword) {
       Alert.alert(
-        "Senhas não coincidem",
+        "As senhas são diferentes",
         "A nova senha e a confirmação devem ser iguais."
       );
       return false;

@@ -19,7 +19,6 @@ import Toast from "react-native-toast-message";
 export default function FreteSelector({
   endereco,
   cartItems,
-  voucherCartItems,
   onFreteSelect,
   selectedFrete,
 }) {
@@ -32,30 +31,23 @@ export default function FreteSelector({
   const [expandido, setExpandido] = useState(false);
 
   useEffect(() => {
-    // Se só há vouchers no carrinho (sem produtos físicos), frete é grátis
-    if (cartItems.length === 0 && voucherCartItems.length > 0) {
-      setFreteGratuito();
-    } else if (endereco && endereco.cep && cartItems.length > 0) {
+    if (endereco && endereco.cep && cartItems.length > 0) {
       calcularOpcoesFrete();
     } else {
       resetarFrete();
     }
-  }, [endereco, cartItems, voucherCartItems]);
+  }, [endereco, cartItems]);
 
   const calcularOpcoesFrete = async () => {
     if (!endereco || !endereco.cep) return;
 
-    // Se não há produtos físicos, apenas vouchers
-    if (cartItems.length === 0) {
-      setFreteGratuito();
-      return;
-    }
+    if (cartItems.length === 0) return;
 
     try {
       setLoading(true);
       setOpcoesFrete([]);
 
-      // Calcular valor total dos produtos (sem vouchers)
+      // Calcular valor total dos produtos
       const invoiceValue = cartItems.reduce((total, item) => {
         return total + item.product_price * item.quantity;
       }, 0);
@@ -67,21 +59,13 @@ export default function FreteSelector({
         product_price: item.product_price,
       }));
 
-      // Preparar dados dos vouchers para a API
-      const vouchers = voucherCartItems.map((item) => ({
-        voucher_id: item.voucher_id,
-        voucher_quantity: item.quantity,
-        voucher_price: item.voucher_price,
-      }));
-
       // Limpar CEP (remover caracteres especiais)
       const cepLimpo = endereco.cep.replace(/\D/g, "");
 
       const response = await calcularFrete(
         cepLimpo,
         invoiceValue,
-        products,
-        vouchers
+        products
       );
 
       if (response.success && response.quote && response.quote.services) {
@@ -164,30 +148,6 @@ export default function FreteSelector({
     }
   };
 
-  const setFreteGratuito = () => {
-    // Para vouchers, o frete é sempre gratuito (entrega por email)
-    const freteGratis = {
-      serviceCode: "VOUCHER_DIGITAL",
-      serviceDescription: "Entrega Digital",
-      carrier: "Email",
-      preco: 0,
-      deliveryTime: "Imediata",
-    };
-
-    setOpcoesFrete([freteGratis]);
-
-    if (onFreteSelect) {
-      onFreteSelect(freteGratis);
-    }
-
-    Toast.show({
-      type: "success",
-      text1: "Frete Grátis",
-      text2: "Vouchers são entregues por email",
-      visibilityTime: 2000,
-    });
-  };
-
   const toggleExpandir = () => {
     if (opcoesFrete.length > 0) {
       setExpandido(!expandido);
@@ -195,7 +155,7 @@ export default function FreteSelector({
   };
 
   // Se não há endereço ou não há itens no carrinho
-  if (!endereco || (cartItems.length === 0 && voucherCartItems.length === 0)) {
+  if (!endereco || cartItems.length === 0) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -205,24 +165,6 @@ export default function FreteSelector({
               ? "Selecione um endereço para calcular o frete"
               : "Adicione produtos para calcular o frete"}
           </Text>
-        </View>
-      </View>
-    );
-  }
-
-  // Se há apenas vouchers no carrinho (sem produtos físicos)
-  if (cartItems.length === 0 && voucherCartItems.length > 0) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <MaterialIcons name="email" size={20} color={theme.colors.primary} />
-          <View style={styles.headerContent}>
-            <Text style={styles.headerText}>Entrega Digital - Grátis</Text>
-            <Text style={styles.freteInfo}>
-              Vouchers são enviados por email após a confirmação do pagamento
-            </Text>
-          </View>
-          <MaterialIcons name="check-circle" size={20} color="#4CAF50" />
         </View>
       </View>
     );
@@ -313,7 +255,7 @@ export default function FreteSelector({
       )}
 
       {/* Informação do endereço */}
-      <View style={styles.enderecoInfo}>
+      <View style={styles.enderecoDados}>
         <MaterialIcons
           name="place"
           size={16}
@@ -384,9 +326,9 @@ const getStyles = (theme, isDark) => StyleSheet.create({
     borderBottomColor: isDark ? "#24242A" : "#f5f5f5",
   },
   opcaoFreteSelecionada: {
-    backgroundColor: isDark ? "rgba(124, 77, 255, 0.12)" : "#f8f9ff",
+    backgroundColor: isDark ? "rgba(11, 110, 102, 0.12)" : "#f8f9ff",
     borderLeftWidth: 3,
-    borderLeftColor: theme.colors.primary || "#7C4DFF",
+    borderLeftColor: theme.colors.primary,
   },
   opcaoInfo: {
     flex: 1,
@@ -405,7 +347,7 @@ const getStyles = (theme, isDark) => StyleSheet.create({
   opcaoValor: {
     fontSize: 16,
     fontWeight: "bold",
-    color: theme.colors.primary || "#7C4DFF",
+    color: theme.colors.primary,
   },
   opcaoCarrier: {
     fontSize: 12,
@@ -416,7 +358,7 @@ const getStyles = (theme, isDark) => StyleSheet.create({
     fontSize: 12,
     color: isDark ? "#8A8A90" : "#6B7280",
   },
-  enderecoInfo: {
+  enderecoDados: {
     flexDirection: "row",
     alignItems: "center",
     padding: 12,

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import CoinIcon from "../components/ui/CoinIcon";
+import PointsIcon from "../components/ui/PointsIcon";
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import * as ImagePicker from "expo-image-picker";
 import { logout, requestDeleteAccount, getUserEmail } from "../api/authApi";
-import { getProfile, uploadAvatar, updateProfile, getMyRedemptions, getRanking } from "../api/barberApi";
+import { getProfile, uploadAvatar, updateProfile, getMyRedemptions, getRanking } from "../api/legado";
 import { useAuth } from "../components/AuthProvider";
 import { CartService } from "../services/cartService";
 import { theme, createTextStyle, createButtonStyle } from "../utils/theme";
@@ -30,15 +30,23 @@ import { config } from "../utils/config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../utils/ThemeContext";
 import Skeleton from "../components/ui/Skeleton";
+import Toast from "react-native-toast-message";
 
 const Watermark = ({ styles }) => {
   return (
     <View style={styles.watermarkWrapper}>
       <Text style={styles.watermarkCopyright}>
-        © 2026 Sans Company Barbearia. Todos os direitos reservados.
+        © 2026 Agenda Flui. Todos os direitos reservados.
       </Text>
 
-      <Text style={styles.watermarkPreText}>App Desenvolvido com ❤️ por</Text>
+      <TouchableOpacity
+        activeOpacity={0.6}
+        onPress={() => Linking.openURL(config.BRAND_URL)}
+      >
+        <Text style={styles.watermarkLinkText}>Feito com Agenda Flui</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.watermarkPreText}>App desenvolvido por</Text>
 
       <TouchableOpacity
         activeOpacity={0.6}
@@ -123,7 +131,7 @@ const PerfilScreen = ({ navigation }) => {
       try {
         const name = await AsyncStorage.getItem("user_name");
         const email = await AsyncStorage.getItem("user_email");
-        setProfile({ user_name: name || "", user_email: email || "", clube_sans: false });
+        setProfile({ user_name: name || "", user_email: email || "", club_member: false });
       } catch (e) {
         setProfile(null);
       }
@@ -253,7 +261,7 @@ const PerfilScreen = ({ navigation }) => {
           routes: [{ name: 'Intro' }],
         });
       } else {
-        navigation.navigate("Barber");
+        navigation.navigate("Professional");
       }
     } catch (error) {
       if (Platform.OS === "web") {
@@ -310,12 +318,12 @@ const PerfilScreen = ({ navigation }) => {
       >
           <View style={{ alignItems: 'center', marginTop: 20 }}>
             <Image
-              source={Platform.OS === "android" ? (theme?.logos?.APP_LOGO_NOBG ? { uri: theme.logos.APP_LOGO_NOBG } : require("../../assets/logosansnobg.png")) : (theme?.logos?.APP_LOGO_DEFAULT ? { uri: theme.logos.APP_LOGO_DEFAULT } : require("../../assets/sanslogo.png"))}
+              source={require("../../assets/logo-horizontal.png")}
               style={{ width: 120, height: 120, marginBottom: 24 }}
               resizeMode="contain"
             />
-            <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 12, textAlign: 'center', color: theme.colors.textPrimary }}>Bem-vindo ao Sans Company!</Text>
-            <Text style={{ fontSize: 16, color: theme.colors.textMuted, textAlign: 'center', marginBottom: 32 }}>Faça login ou crie uma conta para agendar serviços, ganhar moedas e resgatar prêmios.</Text>
+            <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 12, textAlign: 'center', color: theme.colors.textPrimary }}>Bem-vindo ao Agenda Flui!</Text>
+            <Text style={{ fontSize: 16, color: theme.colors.textMuted, textAlign: 'center', marginBottom: 32 }}>Faça login ou crie uma conta para agendar serviços, ganhar pontos e resgatar prêmios.</Text>
 
             <TouchableOpacity
               style={[styles.logoutButton, { backgroundColor: theme.colors.primary, width: '100%', justifyContent: 'center', marginBottom: 16 }]}
@@ -440,11 +448,11 @@ const PerfilScreen = ({ navigation }) => {
                 {profile?.user_email || ""}
               </Text>
 
-              {profile?.user_coins_balance !== undefined && (
-                <View style={styles.coinsBadge}>
-                  <CoinIcon size={14} style={{ marginRight: 6 }} />
-                  <Text style={styles.coinsText}>
-                    {profile.user_coins_balance} Sans Coins
+              {profile?.user_points_balance !== undefined && (
+                <View style={styles.pointsBadge}>
+                  <PointsIcon size={14} style={{ marginRight: 6 }} />
+                  <Text style={styles.pointsText}>
+                    {profile.user_points_balance} pontos
                   </Text>
                 </View>
               )}
@@ -452,11 +460,11 @@ const PerfilScreen = ({ navigation }) => {
           )}
         </View>
 
-        {/* Ranking de Sans Coins */}
-        <Text style={styles.sectionLabel}>Top Clube Sans</Text>
+        {/* Ranking de pontos */}
+        <Text style={styles.sectionLabel}>Ranking do clube</Text>
         <View style={styles.rankingContainer}>
           <View style={styles.rankingCard}>
-            {(!profile?.clube_sans) && (
+            {(!profile?.club_member) && (
               <View style={styles.clubeOverlay}>
                 <BlurView intensity={themeMode === 'dark' ? 30 : 10} tint={themeMode === 'dark' ? 'dark' : 'light'} style={styles.blurContainer} />
                 <View style={styles.clubeOverlayContent}>
@@ -465,17 +473,8 @@ const PerfilScreen = ({ navigation }) => {
                   </View>
                   <Text style={styles.clubeOverlayTitle}>Ranking Exclusivo</Text>
                   <Text style={styles.clubeOverlayText}>
-                    Assine o Clube Sans para participar do ranking e disputar prêmios.
+                    Entre para o clube para participar do ranking e disputar prêmios.
                   </Text>
-                  <TouchableOpacity
-                    style={styles.clubeCTAButton}
-                    onPress={() => {
-                      const message = encodeURIComponent("Olá! Gostaria de saber mais sobre como fazer parte do Clube Sans!");
-                      Linking.openURL(`whatsapp://send?phone=5541997355454&text=${message}`);
-                    }}
-                  >
-                    <Text style={styles.clubeCTAButtonText}>QUERO SER CLUBE SANS</Text>
-                  </TouchableOpacity>
                 </View>
               </View>
             )}
@@ -512,7 +511,7 @@ const PerfilScreen = ({ navigation }) => {
                     <View key={user.id || index} style={[styles.rankingItem, isThisUserMe && styles.rankingItemMe]}>
                       <View style={styles.rankingPosition}>
                         {index === 0 ? (
-                          <MaterialIcons name="emoji-events" size={24} color="#FFD700" />
+                          <MaterialIcons name="emoji-events" size={24} color="#F2A93B" />
                         ) : index === 1 ? (
                           <MaterialIcons name="emoji-events" size={24} color="#C0C0C0" />
                         ) : index === 2 ? (
@@ -536,9 +535,9 @@ const PerfilScreen = ({ navigation }) => {
                         </Text>
                       </View>
                       <View style={styles.rankingPoints}>
-                        <CoinIcon size={14} />
+                        <PointsIcon size={14} />
                         <Text style={styles.rankingPointsText}>
-                          {typeof user.coins === "number" ? user.coins.toLocaleString("pt-BR") : user.coins}
+                          {typeof user.points === "number" ? user.points.toLocaleString("pt-BR") : user.points}
                         </Text>
                       </View>
                     </View>
@@ -566,9 +565,9 @@ const PerfilScreen = ({ navigation }) => {
                       </Text>
                     </View>
                     <View style={styles.rankingPoints}>
-                      <CoinIcon size={14} />
+                      <PointsIcon size={14} />
                       <Text style={styles.rankingPointsText}>
-                        {typeof profile?.user_coins_balance === "number" ? profile.user_coins_balance.toLocaleString("pt-BR") : (profile?.user_coins_balance || 0)}
+                        {typeof profile?.user_points_balance === "number" ? profile.user_points_balance.toLocaleString("pt-BR") : (profile?.user_points_balance || 0)}
                       </Text>
                     </View>
                   </View>
@@ -705,7 +704,7 @@ const PerfilScreen = ({ navigation }) => {
               <Text style={styles.modalTitle}>Excluir Minha Conta</Text>
             </View>
             <Text style={styles.modalMessage}>
-              Esta ação é irreversível. Ao confirmar, todos os seus dados pessoais, histórico de agendamentos e saldo de Sans Coins serão apagados permanentemente de nossos servidores.{"\n\n"}Deseja prosseguir com a exclusão?
+              Esta ação é irreversível. Ao confirmar, todos os seus dados pessoais, histórico de agendamentos e saldo de pontos serão apagados permanentemente de nossos servidores.{"\n\n"}Deseja prosseguir com a exclusão?
             </Text>
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -809,19 +808,19 @@ const getStyles = (theme) => StyleSheet.create({
     color: theme.colors.textMuted,
     marginBottom: 14,
   },
-  coinsBadge: {
+  pointsBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: theme.colors.coinsBackground,
+    backgroundColor: theme.colors.pointsBackground,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
     gap: 6,
   },
-  coinsText: {
+  pointsText: {
     fontSize: 13,
     fontWeight: "700",
-    color: theme.isDarkMode ? '#FFD700' : '#B8860B',
+    color: theme.colors.textPrimary,
   },
   // Section Labels
   sectionLabel: {
@@ -1118,21 +1117,6 @@ const getStyles = (theme) => StyleSheet.create({
     paddingHorizontal: 24,
     fontWeight: '500',
   },
-  clubeCTAButton: {
-    borderWidth: 1.5,
-    borderColor: theme.colors.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: theme.isDarkMode ? 'rgba(124,77,255,0.15)' : 'rgba(255,255,255,0.8)',
-  },
-  clubeCTAButtonText: {
-    color: theme.colors.primary,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-
   watermarkWrapper: {
     alignItems: 'center',
     marginTop: 24,

@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useTheme } from "../../utils/ThemeContext";
+import { fonts } from "../../theme/tokens";
 
 const SectionHeader = ({
   title,
@@ -38,8 +39,8 @@ const getStyles = (theme) => StyleSheet.create({
     flex: 1,
   },
   title: {
+    fontFamily: fonts.display,
     fontSize: 20,
-    fontWeight: "700",
     color: theme.colors.textPrimary,
   },
   subtitle: {
@@ -48,9 +49,9 @@ const getStyles = (theme) => StyleSheet.create({
     marginTop: 2,
   },
   action: {
+    fontFamily: fonts.textSemi,
     fontSize: 14,
-    fontWeight: "600",
-    color: theme.colors.primary,
+    color: theme.colors.brand,
   },
 });
 

@@ -15,51 +15,22 @@ const api = axios.create({
 api.interceptors.request.use(
   async (config) => {
     try {
-      // Se a baseURL for a de produção sem o /api, nós forçamos o /api no começo da rota
-      if (config.baseURL === "https://api.sejasans.com.br" && !config.url.startsWith("/api")) {
-        config.url = `/api${config.url.startsWith("/") ? "" : "/"}${config.url}`;
-      }
-
-      // Log da requisição que está sendo feita
-      console.log(`🚀 [DEBUG] ${config.method.toUpperCase()} ${config.baseURL}${config.url}`);
-
       const token = await AsyncStorage.getItem("auth_token");
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
-      console.log("❌ [DEBUG] Erro ao recuperar token:", error);
+      // segue sem token
     }
     return config;
   },
-  (error) => {
-    console.log("❌ [DEBUG] Erro no interceptor de request:", error);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 // Interceptor para lidar com respostas e erros
 api.interceptors.response.use(
-  (response) => {
-    // Log da resposta bem-sucedida
-    console.log(`✅ [DEBUG] ${response.config.method.toUpperCase()} ${response.config.url} - Status: ${response.status}`);
-    return response;
-  },
+  (response) => response,
   async (error) => {
-    // Log detalhado do erro
-    const logMethod = console.log;
-    logMethod(
-      `❌ [DEBUG] ${error.config?.method?.toUpperCase() || "REQUEST"} ${
-        error.config?.url || "UNKNOWN"
-      } - Erro:`,
-      {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-      }
-    );
-
     if (error.response?.status === 401) {
       // Token expirado ou inválido
       await AsyncStorage.removeItem("auth_token");

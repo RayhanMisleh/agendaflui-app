@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { useTheme } from "../utils/ThemeContext";
-import { listMyAppointments, cancelMyAppointment } from "../api/barberApi";
+import { listMyAppointments, cancelMyAppointment } from "../api/legado";
 import { parseBackendDate } from "../utils/dateUtils";
 import Avatar from "../components/ui/Avatar";
 import Skeleton from "../components/ui/Skeleton";
@@ -149,7 +149,7 @@ const HistoricoAgendamentosScreen = ({ navigation }) => {
             <View style={styles.cardInfo}>
               <Text style={styles.cardService}>{item.service?.name || "Serviço"}</Text>
               <Text style={styles.cardProfessional}>
-                com {item.professional?.name || "Barbeiro"}
+                com {item.professional?.name || "Profissional"}
               </Text>
             </View>
           </View>

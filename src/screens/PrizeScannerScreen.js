@@ -4,7 +4,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { theme } from "../utils/theme";
-import { redeemPrize } from "../api/barberApi";
+import { redeemPrize } from "../api/legado";
 
 export default function PrizeScannerScreen({ route, navigation }) {
   const { prize } = route.params;
@@ -44,9 +44,9 @@ export default function PrizeScannerScreen({ route, navigation }) {
     setScanned(true);
     setLoading(true);
 
-    // We expect the QR Code to have the pattern: "sansclub:prize:1"
+    // We expect the QR Code to have the pattern: "agendaflui:prize:1"
     
-    const expectedPayload = `sansclub:prize:${prize.prize_id || prize.id}`;
+    const expectedPayload = `agendaflui:prize:${prize.prize_id || prize.id}`;
     
     if (data !== expectedPayload) {
       Alert.alert(

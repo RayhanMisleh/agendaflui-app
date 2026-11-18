@@ -1,4 +1,5 @@
-import { Dimensions, Platform } from "react-native";
+import { Dimensions } from "react-native";
+import { colors as brandColors, radius } from "../theme/tokens";
 
 const { width, height } = Dimensions.get("window");
 const isTablet = width >= 768;
@@ -6,54 +7,60 @@ const isTablet = width >= 768;
 // Escala mais agressiva para iPad para preencher a tela
 const scale = isTablet ? 1.8 : 1;
 
-// Sans Company - Design System (Light Mode Premium)
+// Agenda Flui: as chaves antigas de cor apontam para os tokens da marca; as novas (brand, ink, line...) também ficam disponíveis.
+export const buildColors = (palette) => ({
+  ...palette,
+  primary: palette.brand,
+  primaryLight: palette.brand,
+  primaryDark: palette.brandStrong,
+  primaryForeground: palette.onBrand,
+  secondary: palette.ground,
+  secondaryForeground: palette.ink,
+  background: palette.ground,
+  backgroundSecondary: palette.ground,
+  foreground: palette.ink,
+  textPrimary: palette.ink,
+  textSecondary: palette.inkMuted,
+  textMuted: palette.inkMuted,
+  textLight: palette.inkMuted,
+  card: palette.surface,
+  cardForeground: palette.ink,
+  muted: palette.ground,
+  mutedForeground: palette.inkMuted,
+  success: palette.success,
+  successLight: palette.brandTint,
+  successForeground: palette.onBrand,
+  warning: palette.caramelo,
+  warningLight: palette.carameloTint,
+  error: palette.danger,
+  errorLight: palette.carameloTint,
+  destructive: palette.danger,
+  destructiveForeground: "#FFFFFF",
+  points: palette.caramelo,
+  pointsBackground: palette.carameloTint,
+  border: palette.line,
+  borderLight: palette.line,
+  input: palette.line,
+  online: palette.success,
+  offline: palette.inkMuted,
+  busy: palette.danger,
+  overlay: "rgba(15, 42, 39, 0.5)",
+  overlayLight: "rgba(15, 42, 39, 0.1)",
+  white: "#FFFFFF",
+  black: "#000000",
+  ring: palette.brand,
+  accent: palette.brandTint,
+  accentForeground: palette.ink,
+});
+
+export const lightColors = buildColors(brandColors.light);
+export const darkColors = buildColors(brandColors.dark);
+
 export const theme = {
   isTablet,
   width,
   height,
-  colors: {
-    primary: "#6200EA",
-    primaryLight: "#7C4DFF",
-    primaryDark: "#5000C9",
-    primaryForeground: "#FFFFFF",
-    secondary: "#F5F7FA",
-    secondaryForeground: "#1A1A1A",
-    background: "#FFFFFF",
-    backgroundSecondary: "#F5F7FA",
-    foreground: "#1A1A1A",
-    textPrimary: "#1A1A1A",
-    textSecondary: "#424242",
-    textMuted: "#757575",
-    textLight: "#9E9E9E",
-    card: "#FFFFFF",
-    cardForeground: "#1A1A1A",
-    muted: "#F5F7FA",
-    mutedForeground: "#757575",
-    success: "#00C853",
-    successLight: "#E8F5E9",
-    successForeground: "#FFFFFF",
-    warning: "#FFB300",
-    warningLight: "#FFF8E1",
-    error: "#FF1744",
-    errorLight: "#FFEBEE",
-    destructive: "#FF1744",
-    destructiveForeground: "#FFFFFF",
-    coins: "#FFD700",
-    coinsBackground: "#FFF8E1",
-    border: "#E8E8E8",
-    borderLight: "#F0F0F0",
-    input: "#E8E8E8",
-    online: "#00C853",
-    offline: "#BDBDBD",
-    busy: "#FF5722",
-    overlay: "rgba(0, 0, 0, 0.5)",
-    overlayLight: "rgba(0, 0, 0, 0.1)",
-    white: "#FFFFFF",
-    black: "#000000",
-    ring: "#6200EA",
-    accent: "#F5F7FA",
-    accentForeground: "#1A1A1A",
-  },
+  colors: lightColors,
   spacing: {
     xs: 4 * scale,
     sm: 8 * scale,
@@ -64,11 +71,11 @@ export const theme = {
     "3xl": 64 * scale,
   },
   borderRadius: {
-    sm: 8 * scale,
+    sm: radius.sm * scale,
     md: 12 * scale,
-    lg: 16 * scale,
-    xl: 20 * scale,
-    full: 9999,
+    lg: radius.lg * scale,
+    xl: radius.xl * scale,
+    full: radius.pill,
   },
   fontSizes: {
     xs: 11 * scale,
@@ -88,41 +95,18 @@ export const theme = {
     bold: "700",
     extrabold: "800",
   },
+  // Cartão tem borda fina e nenhuma sombra; só o que flutua (modal, folha) usa `lg`.
   shadows: {
-    sm: {
-      shadowColor: "#000000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
-      shadowRadius: 8,
-      elevation: 2,
-    },
-    md: {
-      shadowColor: "#000000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.08,
-      shadowRadius: 12,
-      elevation: 4,
-    },
+    sm: {},
+    md: {},
+    card: {},
+    button: {},
     lg: {
-      shadowColor: "#000000",
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.1,
+      shadowColor: "#0B6E66",
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.3,
       shadowRadius: 24,
       elevation: 8,
-    },
-    card: {
-      shadowColor: "#6200EA",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.08,
-      shadowRadius: 16,
-      elevation: 4,
-    },
-    button: {
-      shadowColor: "#6200EA",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 4,
     },
   },
   animations: {
@@ -133,11 +117,10 @@ export const theme = {
 };
 
 export const gradients = {
-  primary: ["#6200EA", "#7C4DFF"],
-  primaryReverse: ["#7C4DFF", "#6200EA"],
-  gold: ["#FFD700", "#FFA000"],
-  card: ["#FFFFFF", "#F5F7FA"],
-  dark: ["#1A1A1A", "#424242"],
+  primary: [lightColors.brand, lightColors.brandStrong],
+  primaryReverse: [lightColors.brandStrong, lightColors.brand],
+  card: [lightColors.surface, lightColors.ground],
+  dark: [lightColors.ink, lightColors.inkMuted],
 };
 
 export const createTextStyle = (variant = "body", color = "foreground", themeOverride = null) => {

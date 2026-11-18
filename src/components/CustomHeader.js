@@ -2,15 +2,13 @@ import React, { useState, useEffect } from "react";
 import { View, Image, StyleSheet, TouchableOpacity, Text, Platform } from "react-native";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { useTheme } from "../utils/ThemeContext";
-import LogoDefault from "../../assets/sanslogo.png";
-import LogoAndroid from "../../assets/logosansnobg.png";
+import Logo from "../../assets/logo-horizontal.png";
+import LogoNegativo from "../../assets/logo-horizontal-negativo.png";
 import { CartService } from "../services/cartService";
 import CarrinhoComponent from "./CarrinhoComponent";
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "./AuthProvider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const Logo = Platform.OS === "android" ? LogoAndroid : LogoDefault;
 
 const CustomHeader = () => {
   const [cartItemCount, setCartItemCount] = useState(0);
@@ -77,15 +75,7 @@ const CustomHeader = () => {
 
         <View style={styles.logoContainer}>
           <Image
-            source={
-              Platform.OS === "android"
-                ? theme?.logos?.APP_LOGO_NOBG
-                  ? { uri: theme.logos.APP_LOGO_NOBG }
-                  : LogoAndroid
-                : theme?.logos?.APP_LOGO_DEFAULT
-                ? { uri: theme.logos.APP_LOGO_DEFAULT }
-                : LogoDefault
-            }
+            source={theme.isDarkMode ? LogoNegativo : Logo}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -168,8 +158,8 @@ const getStyles = (theme, insets) => {
       justifyContent: "center",
     },
     logo: {
-      width: 130,
-      height: 44,
+      width: 140,
+      height: 30,
     },
     cartButton: {
       width: 44,
@@ -186,7 +176,7 @@ const getStyles = (theme, insets) => {
       position: "absolute",
       top: -3,
       right: -3,
-      backgroundColor: theme.colors.primary || "#7C4DFF",
+      backgroundColor: theme.colors.primary,
       borderRadius: 10,
       minWidth: 20,
       height: 20,

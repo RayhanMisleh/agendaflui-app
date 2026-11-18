@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import CoinIcon from "../components/ui/CoinIcon";
+import PointsIcon from "../components/ui/PointsIcon";
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, Easing } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
@@ -66,7 +66,7 @@ const RedemptionSuccessScreen = ({ route, navigation }) => {
         <Animated.View style={[styles.contentContainer, { opacity: opacityValue, transform: [{ translateY: slideValue }] }]}>
           <Text style={styles.title}>Prêmio Resgatado!</Text>
           <Text style={styles.subtitle}>
-            Apresente esta tela para o barbeiro e pegue sua recompensa exclusiva.
+            Mostre esta tela no balcão e pegue sua recompensa.
           </Text>
 
           <Card style={styles.detailsCard}>
@@ -93,8 +93,8 @@ const RedemptionSuccessScreen = ({ route, navigation }) => {
               <View style={styles.detailTextContainer}>
                 <Text style={styles.detailLabel}>Custo</Text>
                 <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                  <CoinIcon size={16} />
-                  <Text style={[styles.detailValue, {marginLeft: 4}]}>{prize.coins || prize.coins_cost} Sans Coins</Text>
+                  <PointsIcon size={16} />
+                  <Text style={[styles.detailValue, {marginLeft: 4}]}>{prize.points || prize.points_cost} pontos</Text>
                 </View>
               </View>
             </View>

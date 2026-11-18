@@ -224,7 +224,7 @@ export default function ProductsScreen({ navigation }) {
           <MaterialIcons
             name="inventory-2"
             size={36}
-            color={theme.colors.primary || "#7C4DFF"}
+            color={theme.colors.primary}
           />
         </View>
         <Text style={styles.emptyText}>
@@ -267,8 +267,8 @@ export default function ProductsScreen({ navigation }) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[isDark ? "#A855F7" : (theme.colors.primary || "#7C4DFF")]}
-            tintColor={isDark ? "#FFFFFF" : (theme.colors.primary || "#7C4DFF")}
+            colors={[theme.colors.primary]}
+            tintColor={isDark ? "#FFFFFF" : (theme.colors.primary)}
             progressBackgroundColor={isDark ? "#24242A" : "#FFFFFF"}
           />
         }
@@ -315,8 +315,8 @@ const getStyles = (theme, itemWidth, isDark) => StyleSheet.create({
     borderColor: isDark ? "rgba(255,255,255,0.12)" : theme.colors.border || "#E5E5EA",
   },
   categoryChipSelected: {
-    backgroundColor: theme.colors.primary || "#7C4DFF",
-    borderColor: theme.colors.primary || "#7C4DFF",
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
   },
   categoryChipText: {
     fontSize: theme.fontSizes?.sm || 13,
@@ -461,7 +461,7 @@ const getStyles = (theme, itemWidth, isDark) => StyleSheet.create({
   productPrice: {
     fontSize: 16,
     fontWeight: "800",
-    color: theme.colors.primary || "#7C4DFF",
+    color: theme.colors.primary,
   },
   emptyContainer: {
     alignItems: "center",

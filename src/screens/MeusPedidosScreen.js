@@ -89,7 +89,6 @@ const MeusPedidosScreen = ({ navigation }) => {
   const calcularTotalPedido = (pedido) => {
     if (!pedido) return 0;
     const pedidoProducts = pedido.pedido_product || [];
-    const pedidoVouchers = pedido.pedido_voucher || [];
 
     const totalProducts = pedidoProducts.reduce((total, pItem) => {
       const price = getProductItemPrice(pItem.product);
@@ -97,15 +96,9 @@ const MeusPedidosScreen = ({ navigation }) => {
       return total + price * qty;
     }, 0);
 
-    const totalVouchers = pedidoVouchers.reduce((total, vItem) => {
-      const price = Number(vItem.voucher?.voucher_price) || 0;
-      const qty = Number(vItem.pedido_voucher_quantity) || 1;
-      return total + price * qty;
-    }, 0);
-
     const taxaEntrega = Number(pedido.taxa_entrega) || 0;
 
-    return totalProducts + totalVouchers + taxaEntrega;
+    return totalProducts + taxaEntrega;
   };
 
   const obterBadgeStatusCard = (item) => {
@@ -218,10 +211,10 @@ const MeusPedidosScreen = ({ navigation }) => {
             {item.endereco
               ? `${item.endereco.rua}, ${item.endereco.numero} - ${item.endereco.bairro}${item.endereco.complemento ? `, ${item.endereco.complemento}` : ""}`
               : isCancelado
-              ? "Retirada na Barbearia (Cancelado)"
+              ? "Retirada na loja (cancelada)"
               : isPago
               ? "Seu produto está pronto para retirar na loja!"
-              : "Retirar na Barbearia (Aguardando Pagamento)"}
+              : "Retirar na loja (aguardando pagamento)"}
           </Text>
         </View>
 
@@ -253,18 +246,6 @@ const MeusPedidosScreen = ({ navigation }) => {
             </View>
           )}
         </View>
-
-        {/* Vouchers (se houver) */}
-        {item.pedido_voucher && item.pedido_voucher.length > 0 && (
-          <>
-            {item.pedido_voucher.map((voucherItem, index) => (
-              <View key={index} style={styles.produtoItem}>
-                <Text style={styles.produtoNome}>{voucherItem.pedido_voucher_quantity}x {voucherItem.voucher.voucher_name}</Text>
-                <Text style={styles.produtoPreco}>R$ {(voucherItem.voucher.voucher_price * voucherItem.pedido_voucher_quantity).toFixed(2)}</Text>
-              </View>
-            ))}
-          </>
-        )}
 
         {/* Observações (se houver) */}
         {item.observacoes && (

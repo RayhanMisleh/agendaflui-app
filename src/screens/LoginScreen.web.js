@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Image,
   Linking,
-  ImageBackground,
   useWindowDimensions,
 } from "react-native";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
@@ -69,11 +68,7 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <ImageBackground
-      source={require('../../assets/web-bg.jpg')}
-      style={styles.container}
-      resizeMode="cover"
-    >
+    <View style={styles.container}>
       <View style={styles.overlay}>
         <View style={[styles.content, isMobile && styles.contentMobile]}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
@@ -81,7 +76,7 @@ export default function LoginScreen({ navigation }) {
           </TouchableOpacity>
 
           <Image
-            source={(theme?.logos?.APP_LOGO_DEFAULT ? { uri: theme.logos.APP_LOGO_DEFAULT } : require("../../assets/sanslogo.png"))}
+            source={require("../../assets/logo-horizontal.png")}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -162,12 +157,13 @@ export default function LoginScreen({ navigation }) {
           </View>
         </View>
       </View>
-    </ImageBackground>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    backgroundColor: '#08534D',
     flex: 1,
     width: '100%',
     height: '100vh',

@@ -5,26 +5,9 @@ import api from "./apiConfig";
  */
 export const getPedidoDetalhes = async (pedidoId) => {
   try {
-    console.log(`📦 [DEBUG] GET /pedidos/${pedidoId} - Buscando detalhes do pedido`);
-
     const response = await api.get(`/pedidos/${pedidoId}`);
-
-    console.log("📥 [DEBUG] GET /pedidos - Resposta:", {
-      status: response.status,
-      pedidoId: response.data?.pedido_id,
-      status_pedido: response.data?.status,
-      produtos: response.data?.pedido_product?.length || 0,
-      vouchers: response.data?.pedido_voucher?.length || 0,
-    });
-
     return response.data;
   } catch (error) {
-    console.log("❌ [DEBUG] GET /pedidos/:id - Erro:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      url: error.config?.url,
-    });
     throw new Error(error.response?.data?.message || "Erro ao carregar detalhes do pedido");
   }
 };
@@ -36,7 +19,7 @@ export const formatarStatusPedido = (status) => {
   const statusMap = {
     PENDENTE: { text: "Pendente", color: "#f59e0b", icon: "schedule" },
     CONFIRMADO: { text: "Confirmado", color: "#3b82f6", icon: "check-circle" },
-    PREPARANDO: { text: "Preparando", color: "#8b5cf6", icon: "inventory" },
+    PREPARANDO: { text: "Preparando", color: "#0B6E66", icon: "inventory" },
     CONCLUIDO: { text: "Concluído", color: "#10b981", icon: "check-circle" },
     CONCLUÍDO: { text: "Concluído", color: "#10b981", icon: "check-circle" },
     SAIU_ENTREGA: { text: "Em Rota", color: "#06b6d4", icon: "local-shipping" },
@@ -53,7 +36,7 @@ export const formatarStatusPedido = (status) => {
 export const formatarStatusEntrega = (statusEntrega) => {
   const statusMap = {
     PENDENTE: { text: "Pendente", color: "#f59e0b", icon: "schedule" },
-    PREPARANDO: { text: "Preparando Envio", color: "#8b5cf6", icon: "inventory" },
+    PREPARANDO: { text: "Preparando Envio", color: "#0B6E66", icon: "inventory" },
     ENVIADO: { text: "Enviado", color: "#3b82f6", icon: "local-shipping" },
     SAIU_ENTREGA: { text: "Em Rota de Entrega", color: "#3b82f6", icon: "local-shipping" },
     ENTREGUE: { text: "Entregue", color: "#10b981", icon: "done-all" },
@@ -73,7 +56,7 @@ export const formatarStatusPagamento = (statusPagamento) => {
     APROVADO: { text: "Aprovado", color: "#10b981", icon: "check-circle", needsPayment: false },
     PAID: { text: "Aprovado", color: "#10b981", icon: "check-circle", needsPayment: false },
     AUTHORIZED: { text: "Autorizado", color: "#3b82f6", icon: "verified", needsPayment: false },
-    IN_PROCESS: { text: "Em Processamento", color: "#8b5cf6", icon: "autorenew", needsPayment: false },
+    IN_PROCESS: { text: "Em Processamento", color: "#0B6E66", icon: "autorenew", needsPayment: false },
     REJECTED: { text: "Recusado", color: "#ef4444", icon: "cancel", needsPayment: true },
     CANCELLED: { text: "Cancelado", color: "#ef4444", icon: "cancel", needsPayment: false },
     CANCELADO: { text: "Cancelado", color: "#ef4444", icon: "cancel", needsPayment: false },
@@ -96,15 +79,8 @@ export const calcularTotalPedido = (pedido) => {
       return total + price * qty;
     }, 0) || 0;
 
-  const totalVouchers =
-    pedido.pedido_voucher?.reduce((total, item) => {
-      const price = Number(item.voucher?.voucher_price) || 0;
-      const qty = Number(item.pedido_voucher_quantity) || 1;
-      return total + price * qty;
-    }, 0) || 0;
-
   const taxaEntrega = Number(pedido.taxa_entrega) || 0;
-  return totalProdutos + totalVouchers + taxaEntrega;
+  return totalProdutos + taxaEntrega;
 };
 
 /**

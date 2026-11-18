@@ -1,5 +1,6 @@
 import React from "react";
 import { createStackNavigator } from "@react-navigation/stack";
+import { ROUTES } from "../navigation/routes";
 import MeusPedidosScreen from "./MeusPedidosScreen";
 import PedidoDetalhesScreen from "./PedidoDetalhesScreen";
 
@@ -12,8 +13,8 @@ export default function MeusPedidosStack() {
         headerShown: false,
       }}
     >
-      <Stack.Screen name="MeusPedidosList" component={MeusPedidosScreen} />
-      <Stack.Screen name="PedidoDetalhes" component={PedidoDetalhesScreen} />
+      <Stack.Screen name={ROUTES.MeusPedidosList} component={MeusPedidosScreen} />
+      <Stack.Screen name={ROUTES.PedidoDetalhes} component={PedidoDetalhesScreen} />
     </Stack.Navigator>
   );
 }

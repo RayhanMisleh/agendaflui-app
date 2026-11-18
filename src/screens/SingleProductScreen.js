@@ -368,7 +368,7 @@ const getStyles = (theme, isDark) => StyleSheet.create({
     marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: theme.colors.primary || "#7C4DFF",
+    backgroundColor: theme.colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
@@ -440,7 +440,7 @@ const getStyles = (theme, isDark) => StyleSheet.create({
   categoryLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: theme.colors.primary || "#7C4DFF",
+    color: theme.colors.primary,
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
@@ -495,7 +495,7 @@ const getStyles = (theme, isDark) => StyleSheet.create({
   productPrice: {
     fontSize: 26,
     fontWeight: "800",
-    color: theme.colors.primary || "#7C4DFF",
+    color: theme.colors.primary,
     marginBottom: 16,
   },
   descriptionSection: {
@@ -554,14 +554,14 @@ const getStyles = (theme, isDark) => StyleSheet.create({
     textAlign: "center",
   },
   addToCartButton: {
-    backgroundColor: theme.colors.primary || "#7C4DFF",
+    backgroundColor: theme.colors.primary,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     paddingVertical: 16,
     borderRadius: 14,
     marginTop: 8,
-    shadowColor: theme.colors.primary || "#7C4DFF",
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

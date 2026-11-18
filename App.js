@@ -5,6 +5,17 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { createStackNavigator } from "@react-navigation/stack";
 import * as Notifications from "expo-notifications";
+import { useFonts } from "expo-font";
+import {
+  BricolageGrotesque_600SemiBold,
+  BricolageGrotesque_700Bold,
+} from "@expo-google-fonts/bricolage-grotesque";
+import {
+  Figtree_400Regular,
+  Figtree_500Medium,
+  Figtree_600SemiBold,
+  Figtree_700Bold,
+} from "@expo-google-fonts/figtree";
 
 import { Platform } from "react-native";
 import IntroScreen from "./src/screens/IntroScreen";
@@ -18,6 +29,8 @@ import { AuthProvider, useAuth } from "./src/components/AuthProvider";
 import LoadingScreen from "./src/components/LoadingScreen";
 import { initializeNotifications } from "./src/services/notificationService";
 import { ThemeProvider, useTheme } from "./src/utils/ThemeContext";
+import { ROUTES } from "./src/navigation/routes";
+import { colors } from "./src/theme/tokens";
 
 import Toast from "react-native-toast-message";
 
@@ -33,20 +46,16 @@ const RootNavigator = () => {
   // Inicializar push notifications quando o usuário estiver autenticado
   useEffect(() => {
     if (isAuthenticated) {
-      initializeNotifications().catch((err) =>
-        console.error("Erro ao inicializar notificações:", err)
-      );
+      initializeNotifications().catch(() => {});
 
       // Listener para notificações recebidas em foreground
       notificationListener.current =
         Notifications.addNotificationReceivedListener((notification) => {
           const { title, body } = notification.request.content;
-          console.log("🔔 Notificação recebida em foreground:", title);
-
           // Mostrar toast quando a notificação chegar com o app aberto
           Toast.show({
             type: "info",
-            text1: title || "Sans Company",
+            text1: title || "Agenda Flui",
             text2: body || "",
             visibilityTime: 5000,
             topOffset: 60,
@@ -57,15 +66,9 @@ const RootNavigator = () => {
       responseListener.current =
         Notifications.addNotificationResponseReceivedListener((response) => {
           const data = response.notification.request.content.data;
-          console.log("📱 Usuário tocou na notificação:", data);
-
           // Aqui pode-se navegar para uma tela específica baseado no tipo
           if (data?.type === "appointment_reminder") {
             // Navegar para tela de agendamentos (tratado pelo navigation ref se necessário)
-            console.log(
-              "📅 Notificação de agendamento:",
-              data.appointment_id
-            );
           }
         });
     }
@@ -86,7 +89,7 @@ const RootNavigator = () => {
       const style = document.createElement('style');
       style.textContent = `
         body, html, #root {
-          background-color: #111111;
+          background-color: ${colors.light.ground};
           overscroll-behavior: none;
           touch-action: pan-y;
         }
@@ -129,15 +132,15 @@ const RootNavigator = () => {
           }),
         }),
       }} 
-      initialRouteName={Platform.OS === "web" && !isAuthenticated ? "Intro" : "Navigator"}
+      initialRouteName={Platform.OS === "web" && !isAuthenticated ? ROUTES.Intro : ROUTES.Navigator}
     >
-      {Platform.OS === "web" && <Stack.Screen name="Intro" component={IntroScreen} />}
-      <Stack.Screen name="Navigator" component={Navigator} />
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="SignUp" component={SignUpScreen} />
-      <Stack.Screen name="RecuperarSenha" component={RecuperarSenhaScreen} />
-      <Stack.Screen name="NewUserEmailCode" component={NewUserEmailCodeScreen} />
-      <Stack.Screen name="ConfirmarExclusaoCode" component={ConfirmarExclusaoCodeScreen} />
+      {Platform.OS === "web" && <Stack.Screen name={ROUTES.Intro} component={IntroScreen} />}
+      <Stack.Screen name={ROUTES.Navigator} component={Navigator} />
+      <Stack.Screen name={ROUTES.Login} component={LoginScreen} />
+      <Stack.Screen name={ROUTES.SignUp} component={SignUpScreen} />
+      <Stack.Screen name={ROUTES.RecuperarSenha} component={RecuperarSenhaScreen} />
+      <Stack.Screen name={ROUTES.NewUserEmailCode} component={NewUserEmailCodeScreen} />
+      <Stack.Screen name={ROUTES.ConfirmarExclusaoCode} component={ConfirmarExclusaoCodeScreen} />
     </Stack.Navigator>
     <StatusBar style={isDarkMode ? "light" : "dark"} backgroundColor="transparent" translucent={true} />
     </>
@@ -145,14 +148,31 @@ const RootNavigator = () => {
 };
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    BricolageGrotesque_600SemiBold,
+    BricolageGrotesque_700Bold,
+    Figtree_400Regular,
+    Figtree_500Medium,
+    Figtree_600SemiBold,
+    Figtree_700Bold,
+  });
+
+  if (!fontsLoaded) {
+    return (
+      <ThemeProvider>
+        <LoadingScreen />
+      </ThemeProvider>
+    );
+  }
+
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#111111' }}>
-      <SafeAreaProvider style={{ backgroundColor: '#111111' }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.light.ground }}>
+      <SafeAreaProvider style={{ backgroundColor: colors.light.ground }}>
         <ThemeProvider>
           <AuthProvider>
             <NavigationContainer
               documentTitle={{
-                formatter: (options, route) => `Sans Company`,
+                formatter: () => "Agenda Flui",
               }}
             >
               <RootNavigator />

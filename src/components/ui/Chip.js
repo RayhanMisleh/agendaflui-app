@@ -1,6 +1,7 @@
 import React from "react";
 import { TouchableOpacity, Text, StyleSheet, View } from "react-native";
-import { theme } from "../../utils/theme";
+import { useTheme } from "../../utils/ThemeContext";
+import { radius, fonts } from "../../theme/tokens";
 
 const Chip = ({
   label,
@@ -10,6 +11,9 @@ const Chip = ({
   size = "md", // sm, md
   style,
 }) => {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+
   return (
     <TouchableOpacity
       style={[
@@ -29,12 +33,12 @@ const Chip = ({
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   base: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.full,
+    borderRadius: radius.pill,
   },
   sizeSm: {
     paddingVertical: 8,
@@ -47,25 +51,23 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   selected: {
-    backgroundColor: theme.colors.primary,
-    elevation: 4,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    backgroundColor: theme.colors.brandTint,
+    borderWidth: 1,
+    borderColor: theme.colors.brand,
   },
   unselected: {
-    backgroundColor: theme.colors.secondary,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.line,
   },
   label: {
     fontSize: 14,
-    fontWeight: "500",
-    color: theme.colors.textSecondary,
+    fontFamily: fonts.textMedium,
+    color: theme.colors.inkMuted,
   },
   labelSelected: {
-    color: "#FFFFFF",
+    color: theme.colors.ink,
+    fontFamily: fonts.textSemi,
   },
   icon: {
     marginRight: 6,

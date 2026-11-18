@@ -89,7 +89,7 @@ export default function SignUpScreen({ navigation }) {
       setConfirmPasswordError("Confirmação de senha é obrigatória");
       isValid = false;
     } else if (password !== confirmPassword) {
-      setConfirmPasswordError("Senhas não coincidem");
+      setConfirmPasswordError("As senhas são diferentes");
       isValid = false;
     } else {
       setConfirmPasswordError("");
@@ -143,7 +143,7 @@ export default function SignUpScreen({ navigation }) {
             {/* Header */}
             <View style={styles.header}>
               <Image
-                source={Platform.OS === "android" ? (theme?.logos?.APP_LOGO_NOBG ? { uri: theme.logos.APP_LOGO_NOBG } : require("../../assets/logosansnobg.png")) : (theme?.logos?.APP_LOGO_DEFAULT ? { uri: theme.logos.APP_LOGO_DEFAULT } : require("../../assets/sanslogo.png"))}
+                source={require("../../assets/logo-horizontal.png")}
                 style={styles.logo}
                 resizeMode="contain"
               />
@@ -199,7 +199,7 @@ export default function SignUpScreen({ navigation }) {
 
               {/* Phone Input */}
               <View style={styles.inputContainer}>
-                <Text style={styles.label}>Telefone (WhatsApp)</Text>
+                <Text style={styles.label}>Telefone</Text>
                 <TextInput
                   style={[styles.input, phoneError ? styles.inputError : null]}
                   placeholder="(00) 00000-0000"

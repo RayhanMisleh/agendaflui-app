@@ -61,7 +61,7 @@ export default function FinalizarCompraModal({
             </View>
           </View>
           {/* Endereço */}
-          {endereco && frete?.serviceCode !== "PICKUP" && frete?.serviceCode !== "VOUCHER_DIGITAL" && (
+          {endereco && frete?.serviceCode !== "PICKUP" && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <MaterialIcons
@@ -377,7 +377,7 @@ const getStyles = (theme, isDark) => StyleSheet.create({
   totalValue: {
     fontSize: 20,
     fontWeight: "800",
-    color: theme.colors.primary || "#7C4DFF",
+    color: theme.colors.primary,
   },
   infoSection: {
     marginTop: 20,
@@ -415,7 +415,7 @@ const getStyles = (theme, isDark) => StyleSheet.create({
     gap: 8,
   },
   primaryButton: {
-    backgroundColor: theme.colors.primary || "#7C4DFF",
+    backgroundColor: theme.colors.primary,
   },
   buttonDisabled: {
     opacity: 0.7,

@@ -33,7 +33,7 @@ export async function registerForPushNotificationsAsync() {
       description: "Notificações de lembrete antes dos seus agendamentos",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#6200EA",
+      lightColor: "#0B6E66",
       sound: "default",
       enableVibrate: true,
       showBadge: true,
@@ -43,7 +43,7 @@ export async function registerForPushNotificationsAsync() {
       name: "Notificações Gerais",
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#6200EA",
+      lightColor: "#0B6E66",
       sound: "default",
     });
   }

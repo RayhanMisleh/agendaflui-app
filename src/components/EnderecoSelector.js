@@ -340,7 +340,7 @@ export default function EnderecoSelector({
             />
             {loadingCep && (
               <View style={styles.cepLoading}>
-                <ActivityIndicator size="small" color={theme.colors.primary || "#7C4DFF"} />
+                <ActivityIndicator size="small" color={theme.colors.primary} />
               </View>
             )}
           </View>
@@ -487,7 +487,7 @@ const getStyles = (theme, isDark) => StyleSheet.create({
   addButton: {
     padding: 6,
     borderRadius: 14,
-    backgroundColor: isDark ? "rgba(124, 77, 255, 0.15)" : "rgba(124, 77, 255, 0.08)",
+    backgroundColor: isDark ? "rgba(11, 110, 102, 0.15)" : "rgba(11, 110, 102, 0.08)",
   },
   loadingContainer: {
     flexDirection: "row",
@@ -512,8 +512,8 @@ const getStyles = (theme, isDark) => StyleSheet.create({
     backgroundColor: isDark ? "#121214" : "#f9f9f9",
   },
   enderecoItemSelected: {
-    borderColor: theme.colors.primary || "#7C4DFF",
-    backgroundColor: isDark ? "rgba(124, 77, 255, 0.15)" : "rgba(124, 77, 255, 0.08)",
+    borderColor: theme.colors.primary,
+    backgroundColor: isDark ? "rgba(11, 110, 102, 0.15)" : "rgba(11, 110, 102, 0.08)",
   },
   enderecoContent: {
     flexDirection: "row",
@@ -527,7 +527,7 @@ const getStyles = (theme, isDark) => StyleSheet.create({
     flex: 1,
   },
   enderecoTextSelected: {
-    color: theme.colors.primary || "#7C4DFF",
+    color: theme.colors.primary,
     fontWeight: "600",
   },
   formContainer: {
@@ -538,7 +538,7 @@ const getStyles = (theme, isDark) => StyleSheet.create({
     padding: 8,
   },
   cancelButtonText: {
-    color: theme.colors.primary || "#7C4DFF",
+    color: theme.colors.primary,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -585,7 +585,7 @@ const getStyles = (theme, isDark) => StyleSheet.create({
     top: 12,
   },
   createButton: {
-    backgroundColor: theme.colors.primary || "#7C4DFF",
+    backgroundColor: theme.colors.primary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

@@ -41,7 +41,7 @@ const AppointmentSuccessScreen = ({ navigation }) => {
       dateLabel: when.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", timeZone: "UTC" }),
       timeLabel: parsed.time,
       service: appointment.service?.name || "Serviço",
-      barber: appointment.professional?.name || "Barbeiro",
+      professional: appointment.professional?.name || "Profissional",
       user: appointment.user?.user_name || "Cliente",
     };
   }, [appointment]);
@@ -116,18 +116,18 @@ const AppointmentSuccessScreen = ({ navigation }) => {
                 <MaterialIcons name="access-time" size={20} color={theme.colors.primary} />
                 <Text style={styles.detailText}>{formatted.timeLabel}</Text>
               </View>
-              <View style={styles.barberProfileDivider} />
-              <View style={styles.barberProfileCard}>
+              <View style={styles.professionalProfileDivider} />
+              <View style={styles.professionalProfileCard}>
                 {appointment.professional ? (
-                  <Avatar source={appointment.professional.avatar_url} size="lg" name={formatted.barber} />
+                  <Avatar source={appointment.professional.avatar_url} size="lg" name={formatted.professional} />
                 ) : (
                   <View style={styles.placeholderAvatar}>
                     <MaterialIcons name="person" size={28} color="#FFF" />
                   </View>
                 )}
-                <View style={styles.barberProfileInfo}>
-                  <Text style={styles.barberGreeting}>Seu profissional</Text>
-                  <Text style={styles.barberName}>{formatted.barber}</Text>
+                <View style={styles.professionalProfileInfo}>
+                  <Text style={styles.professionalGreeting}>Seu profissional</Text>
+                  <Text style={styles.professionalName}>{formatted.professional}</Text>
                   <View style={styles.serviceTag}>
                     <MaterialIcons name="content-cut" size={14} color={theme.colors.primary} />
                     <Text style={styles.serviceTagText}>{formatted.service}</Text>
@@ -218,12 +218,12 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     marginLeft: 12,
     fontWeight: "600",
   },
-  barberProfileDivider: {
+  professionalProfileDivider: {
     height: 1,
     backgroundColor: theme.colors.borderLight,
     marginVertical: 16,
   },
-  barberProfileCard: {
+  professionalProfileCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: theme.colors.card,
@@ -247,18 +247,18 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  barberProfileInfo: {
+  professionalProfileInfo: {
     marginLeft: 16,
     flex: 1,
   },
-  barberGreeting: {
+  professionalGreeting: {
     fontSize: 12,
     color: theme.colors.textMuted,
     textTransform: "uppercase",
     fontWeight: "700",
     letterSpacing: 0.5,
   },
-  barberName: {
+  professionalName: {
     fontSize: 18,
     fontWeight: "700",
     color: theme.colors.textPrimary,
@@ -280,40 +280,40 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     color: theme.colors.primary,
     marginLeft: 4,
   },
-  coinsCard: {
-    backgroundColor: theme.colors.coinsBackground,
+  pointsCard: {
+    backgroundColor: theme.colors.pointsBackground,
     borderRadius: theme.borderRadius.lg,
     padding: 20,
     width: "100%",
     marginTop: 16,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: theme.colors.coins + "50",
+    borderColor: theme.colors.points + "50",
   },
-  coinsTitle: {
+  pointsTitle: {
     fontSize: 13,
     color: theme.colors.textSecondary,
   },
-  coinsRow: {
+  pointsRow: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 8,
   },
-  coinsEmoji: {
+  pointsEmoji: {
     fontSize: 28,
     marginRight: 8,
   },
-  coinsAmount: {
+  pointsAmount: {
     fontSize: 32,
     fontWeight: "700",
     color: theme.colors.textPrimary,
   },
-  coinsLabel: {
+  pointsLabel: {
     fontSize: 16,
     color: theme.colors.textSecondary,
     marginLeft: 8,
   },
-  coinsHint: {
+  pointsHint: {
     fontSize: 12,
     color: theme.colors.textMuted,
     marginTop: 8,

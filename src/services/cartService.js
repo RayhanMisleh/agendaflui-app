@@ -1,7 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const CART_STORAGE_KEY = "@cart_items";
-const VOUCHER_CART_STORAGE_KEY = "@voucher_cart_items";
 
 const getEffectiveUnitPrice = (item) => {
   if (
@@ -156,159 +155,13 @@ export const CartService = {
     }
   },
 
-  // ==================== FUNÇÕES PARA VOUCHERS ====================
-
   /**
-   * Obtém todos os vouchers do carrinho
-   */
-  async getVoucherCartItems() {
-    try {
-      const voucherData = await AsyncStorage.getItem(VOUCHER_CART_STORAGE_KEY);
-      return voucherData ? JSON.parse(voucherData) : [];
-    } catch (error) {
-      console.error("Erro ao buscar vouchers do carrinho:", error);
-      return [];
-    }
-  },
-
-  /**
-   * Adiciona um voucher ao carrinho ou atualiza a quantidade
-   */
-  async addVoucherToCart(voucher, quantity = 1) {
-    try {
-      const voucherCartItems = await this.getVoucherCartItems();
-      const existingItemIndex = voucherCartItems.findIndex(
-        (item) => item.voucher_id === voucher.voucher_id
-      );
-
-      if (existingItemIndex !== -1) {
-        // Se o voucher já existe, atualiza a quantidade
-        voucherCartItems[existingItemIndex].quantity += quantity;
-        voucherCartItems[existingItemIndex].total_price =
-          voucherCartItems[existingItemIndex].quantity * voucher.voucher_price;
-      } else {
-        // Se é um voucher novo, adiciona ao carrinho
-        const voucherCartItem = {
-          ...voucher,
-          quantity: quantity,
-          total_price: quantity * voucher.voucher_price,
-          added_at: new Date().toISOString(),
-        };
-        voucherCartItems.push(voucherCartItem);
-      }
-
-      await AsyncStorage.setItem(
-        VOUCHER_CART_STORAGE_KEY,
-        JSON.stringify(voucherCartItems)
-      );
-      return voucherCartItems;
-    } catch (error) {
-      console.error("Erro ao adicionar voucher ao carrinho:", error);
-      throw error;
-    }
-  },
-
-  /**
-   * Remove um voucher do carrinho
-   */
-  async removeVoucherFromCart(voucherId) {
-    try {
-      const voucherCartItems = await this.getVoucherCartItems();
-      const updatedItems = voucherCartItems.filter(
-        (item) => item.voucher_id !== voucherId
-      );
-      await AsyncStorage.setItem(
-        VOUCHER_CART_STORAGE_KEY,
-        JSON.stringify(updatedItems)
-      );
-      return updatedItems;
-    } catch (error) {
-      console.error("Erro ao remover voucher do carrinho:", error);
-      throw error;
-    }
-  },
-
-  /**
-   * Atualiza a quantidade de um voucher no carrinho
-   */
-  async updateVoucherQuantity(voucherId, newQuantity) {
-    try {
-      if (newQuantity <= 0) {
-        return await this.removeVoucherFromCart(voucherId);
-      }
-
-      const voucherCartItems = await this.getVoucherCartItems();
-      const itemIndex = voucherCartItems.findIndex(
-        (item) => item.voucher_id === voucherId
-      );
-
-      if (itemIndex !== -1) {
-        voucherCartItems[itemIndex].quantity = newQuantity;
-        voucherCartItems[itemIndex].total_price =
-          newQuantity * voucherCartItems[itemIndex].voucher_price;
-        await AsyncStorage.setItem(
-          VOUCHER_CART_STORAGE_KEY,
-          JSON.stringify(voucherCartItems)
-        );
-      }
-
-      return voucherCartItems;
-    } catch (error) {
-      console.error("Erro ao atualizar quantidade do voucher:", error);
-      throw error;
-    }
-  },
-
-  /**
-   * Limpa todos os vouchers do carrinho
-   */
-  async clearVoucherCart() {
-    try {
-      await AsyncStorage.removeItem(VOUCHER_CART_STORAGE_KEY);
-      return [];
-    } catch (error) {
-      console.error("Erro ao limpar carrinho de vouchers:", error);
-      throw error;
-    }
-  },
-
-  /**
-   * Calcula o total dos vouchers no carrinho
-   */
-  async getVoucherCartTotal() {
-    try {
-      const voucherCartItems = await this.getVoucherCartItems();
-      return voucherCartItems.reduce(
-        (total, item) => total + item.total_price,
-        0
-      );
-    } catch (error) {
-      console.error("Erro ao calcular total dos vouchers:", error);
-      return 0;
-    }
-  },
-
-  /**
-   * Obtém a quantidade total de vouchers no carrinho
-   */
-  async getVoucherCartItemCount() {
-    try {
-      const voucherCartItems = await this.getVoucherCartItems();
-      return voucherCartItems.reduce((total, item) => total + item.quantity, 0);
-    } catch (error) {
-      console.error("Erro ao contar vouchers no carrinho:", error);
-      return 0;
-    }
-  },
-
-  /**
-   * Limpa todo o carrinho (produtos e vouchers)
+   * Limpa todo o carrinho
    */
   async clearAllCart() {
     try {
       await this.clearCart();
-      await this.clearVoucherCart();
-      return { products: [], vouchers: [] };
+      return { products: [] };
     } catch (error) {
       console.error("Erro ao limpar todo o carrinho:", error);
       throw error;
@@ -316,30 +169,16 @@ export const CartService = {
   },
 
   /**
-   * Obtém o total geral (produtos + vouchers)
+   * Obtém o total geral do carrinho
    */
   async getGrandTotal() {
-    try {
-      const productTotal = await this.getCartTotal();
-      const voucherTotal = await this.getVoucherCartTotal();
-      return productTotal + voucherTotal;
-    } catch (error) {
-      console.error("Erro ao calcular total geral:", error);
-      return 0;
-    }
+    return this.getCartTotal();
   },
 
   /**
-   * Obtém contagem total de itens (produtos + vouchers)
+   * Obtém a contagem total de itens do carrinho
    */
   async getTotalItemCount() {
-    try {
-      const productCount = await this.getCartItemCount();
-      const voucherCount = await this.getVoucherCartItemCount();
-      return productCount + voucherCount;
-    } catch (error) {
-      console.error("Erro ao contar todos os itens:", error);
-      return 0;
-    }
+    return this.getCartItemCount();
   },
 };

@@ -1,51 +1,52 @@
 {
   "expo": {
-    "name": "Sans Company",
-    "slug": "sans-club",
-    "version": "1.2.2",
+    "name": "Agenda Flui",
+    "slug": "agendaflui",
+    "version": "2.0.0",
+    "scheme": "agendaflui",
     "orientation": "portrait",
-    "icon": "./assets/sansicon.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#F3F8F6"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
     "plugins": [
+      "expo-font",
+      "expo-secure-store",
       [
         "expo-notifications",
         {
-          "icon": "./assets/sansicon.png",
-          "color": "#6200EA",
+          "icon": "./assets/notification-icon.png",
+          "color": "#0B6E66",
           "defaultChannel": "default"
         }
-      ],
-      "expo-font"
+      ]
     ],
     "notification": {
-      "icon": "./assets/sansicon.png",
-      "color": "#6200EA",
+      "icon": "./assets/notification-icon.png",
+      "color": "#0B6E66",
       "androidMode": "default",
-      "androidCollapsedTitle": "Sans Company"
+      "androidCollapsedTitle": "Agenda Flui"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sansclub.app",
-      "buildNumber": "4",
+      "bundleIdentifier": "com.agendaflui.app",
+      "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.sansclub.app",
-      "versionCode": 4,
-      "icon": "./assets/Logo_Sans.png",
+      "package": "com.agendaflui.app",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/Logo_Sans.png",
-        "backgroundColor": "#6200EA"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F3F8F6"
       },
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
@@ -54,20 +55,12 @@
       ]
     },
     "web": {
-      "name": "Sans Company",
-      "shortName": "Sans",
-      "favicon": "./assets/favicon-rounded.png"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "f5314f8e-8e80-4340-9541-b7b9cdd36d18"
-      }
+      "name": "Agenda Flui",
+      "shortName": "Agenda Flui",
+      "favicon": "./assets/favicon.png"
     },
     "runtimeVersion": {
       "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/f5314f8e-8e80-4340-9541-b7b9cdd36d18"
     }
   }
 }

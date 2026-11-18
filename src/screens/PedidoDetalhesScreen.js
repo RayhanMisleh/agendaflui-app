@@ -13,7 +13,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { useTheme } from "../utils/ThemeContext";
 import { formatPrice } from "../api/products";
-import { formatVoucherPrice } from "../api/vouchers";
 import {
   getPedidoDetalhes,
   formatarStatusPedido,
@@ -383,7 +382,7 @@ export default function PedidoDetalhesScreen({ route, navigation }) {
                 }}
               >
                 {isPago
-                  ? `Apresente o número deste pedido (#${pedido.pedido_id}) na recepção da barbearia.`
+                  ? `Apresente o número deste pedido (#${pedido.pedido_id}) na loja.`
                   : "O pedido será liberado para retirada assim que o pagamento for confirmado."}
               </Text>
             </View>
@@ -404,7 +403,7 @@ export default function PedidoDetalhesScreen({ route, navigation }) {
               </>
             ) : (
               <>
-                <Text style={[styles.enderecoText, { fontWeight: "700" }]}>Retirar na Barbearia Sans</Text>
+                <Text style={[styles.enderecoText, { fontWeight: "700" }]}>Retirar na loja</Text>
                 <Text style={[styles.enderecoText, { color: theme.colors.textMuted, marginTop: 4 }]}>
                   Apresente o número deste pedido (#{pedido.pedido_id}) na recepção para retirar seus itens.
                 </Text>
@@ -436,26 +435,6 @@ export default function PedidoDetalhesScreen({ route, navigation }) {
                 </View>
               );
             })}
-          </View>
-        )}
-
-        {pedido.pedido_voucher && pedido.pedido_voucher.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons name="card-giftcard" size={20} color={theme.colors.primary} />
-              <Text style={styles.sectionTitle}>Vouchers</Text>
-            </View>
-            {pedido.pedido_voucher.map((item, index) => (
-              <View key={index} style={styles.itemCard}>
-                <View style={styles.itemInfo}>
-                  <Text style={styles.itemName}>{item.voucher.voucher_name}</Text>
-                  <Text style={styles.itemDescription} numberOfLines={2}>{item.voucher.voucher_description}</Text>
-                </View>
-                <View style={styles.itemPricing}>
-                  <Text style={styles.itemPrice}>{formatVoucherPrice(item.voucher.voucher_price)}</Text>
-                </View>
-              </View>
-            ))}
           </View>
         )}
 
@@ -570,7 +549,7 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     marginTop: 16,
     padding: 14,
     borderRadius: 12,
-    backgroundColor: isDarkMode ? "#1f1d2e" : "#f5f3ff",
+    backgroundColor: isDarkMode ? "#12403B" : "#D7EFEB",
     borderWidth: 1,
     borderColor: isDarkMode ? "#3e3859" : "#ddd6fe",
   },

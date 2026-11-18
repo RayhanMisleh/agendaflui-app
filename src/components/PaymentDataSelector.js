@@ -68,7 +68,7 @@ export default function PaymentDataSelector({ onPaymentDataChange }) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <MaterialIcons name="payment" size={20} color={theme.colors.primary || "#7C4DFF"} />
+        <MaterialIcons name="payment" size={20} color={theme.colors.primary} />
         <Text style={styles.headerTitle}>Dados para Pagamento</Text>
       </View>
 
@@ -107,7 +107,7 @@ export default function PaymentDataSelector({ onPaymentDataChange }) {
         </View>
 
         <View style={styles.paymentInfo}>
-          <MaterialIcons name="info" size={16} color={theme.colors.primary || "#7C4DFF"} />
+          <MaterialIcons name="info" size={16} color={theme.colors.primary} />
           <Text style={styles.paymentInfoText}>
             Você escolherá o método de pagamento na próxima etapa
           </Text>
@@ -173,14 +173,14 @@ const getStyles = (theme, isDark) => StyleSheet.create({
   paymentInfo: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: isDark ? "rgba(124, 77, 255, 0.15)" : "rgba(124, 77, 255, 0.08)",
+    backgroundColor: isDark ? "rgba(11, 110, 102, 0.15)" : "rgba(11, 110, 102, 0.08)",
     padding: 12,
     borderRadius: 10,
     marginTop: 4,
   },
   paymentInfoText: {
     fontSize: 12,
-    color: theme.colors.primary || "#7C4DFF",
+    color: theme.colors.primary,
     marginLeft: 8,
     flex: 1,
     fontWeight: "500",

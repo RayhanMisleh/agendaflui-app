@@ -8,9 +8,7 @@ android/
 .DS_Store
 .env
 .env.*
-
-# Tem uma chave de API escrita no código: fica fora do repositório até a chave sair do arquivo.
-src/api/youtube.js
+!.env.example
 
 # Pasta de trabalho dos agentes (planos em execução, briefs, relatórios)
 .superpowers/

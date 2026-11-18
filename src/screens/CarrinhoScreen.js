@@ -15,7 +15,6 @@ import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { useTheme } from "../utils/ThemeContext";
 import { CartService } from "../services/cartService";
 import { formatPrice, getProductMainImage } from "../api/products";
-import { formatVoucherPrice, getVoucherMainImage } from "../api/vouchers";
 import Toast from "react-native-toast-message";
 import EnderecoSelector from "../components/EnderecoSelector";
 import FreteSelector from "../components/FreteSelector";
@@ -34,7 +33,6 @@ export default function CarrinhoScreen({ navigation }) {
   const styles = getStyles(theme, isDark, insets);
 
   const [cartItems, setCartItems] = useState([]);
-  const [voucherCartItems, setVoucherCartItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [deliveryMethod, setDeliveryMethod] = useState("DELIVERY"); // "DELIVERY" ou "PICKUP"
@@ -70,10 +68,8 @@ export default function CarrinhoScreen({ navigation }) {
     try {
       setLoading(true);
       const items = await CartService.getCartItems();
-      const voucherItems = await CartService.getVoucherCartItems();
       const grandTotal = await CartService.getGrandTotal();
       setCartItems(items);
-      setVoucherCartItems(voucherItems);
       setTotal(grandTotal);
     } catch (error) {
       console.error("Erro ao carregar carrinho:", error);
@@ -118,7 +114,7 @@ export default function CarrinhoScreen({ navigation }) {
     setConfirmModal({
       visible: true,
       title: "Remover Produto",
-      message: `Deseja remover "${productName}" do seu carrinho da Sans Company?`,
+      message: `Deseja remover "${productName}" do seu carrinho?`,
       confirmText: "Remover",
       iconName: "delete-outline",
       confirmColor: "#EF4444",
@@ -135,11 +131,7 @@ export default function CarrinhoScreen({ navigation }) {
           });
 
           // Se esvaziou o carrinho, redireciona para a loja
-          const remainingVouchers = await CartService.getVoucherCartItems();
-          if (
-            (!updatedItems || updatedItems.length === 0) &&
-            (!remainingVouchers || remainingVouchers.length === 0)
-          ) {
+          if (!updatedItems || updatedItems.length === 0) {
             navigation.navigate("MainTabs", { screen: "Loja" });
           }
         } catch (error) {
@@ -156,74 +148,12 @@ export default function CarrinhoScreen({ navigation }) {
     });
   };
 
-  const handleUpdateVoucherQuantity = async (voucherId, newQuantity) => {
-    try {
-      await CartService.updateVoucherQuantity(voucherId, newQuantity);
-      await loadCartItems();
-      Toast.show({
-        type: "success",
-        text1: "Carrinho atualizado",
-        visibilityTime: 2000,
-      });
-    } catch (error) {
-      console.error("Erro ao atualizar quantidade do voucher:", error);
-      Toast.show({
-        type: "error",
-        text1: "Erro",
-        text2: "Não foi possível atualizar a quantidade",
-        visibilityTime: 3000,
-      });
-    }
-  };
-
-  const handleRemoveVoucher = (voucherId, voucherName) => {
-    setConfirmModal({
-      visible: true,
-      title: "Remover Voucher",
-      message: `Deseja remover o voucher "${voucherName}" do seu carrinho da Sans Company?`,
-      confirmText: "Remover",
-      iconName: "delete-outline",
-      confirmColor: "#EF4444",
-      onConfirm: async () => {
-        try {
-          setConfirmModal((prev) => ({ ...prev, loading: true }));
-          const updatedVouchers = await CartService.removeVoucherFromCart(voucherId);
-          await loadCartItems();
-          setConfirmModal((prev) => ({ ...prev, visible: false, loading: false }));
-          Toast.show({
-            type: "success",
-            text1: "Voucher removido",
-            visibilityTime: 2000,
-          });
-
-          // Se esvaziou o carrinho, redireciona para a loja
-          const remainingProducts = await CartService.getCartItems();
-          if (
-            (!updatedVouchers || updatedVouchers.length === 0) &&
-            (!remainingProducts || remainingProducts.length === 0)
-          ) {
-            navigation.navigate("MainTabs", { screen: "Loja" });
-          }
-        } catch (error) {
-          console.error("Erro ao remover voucher:", error);
-          setConfirmModal((prev) => ({ ...prev, loading: false }));
-          Toast.show({
-            type: "error",
-            text1: "Erro",
-            text2: "Não foi possível remover o voucher",
-            visibilityTime: 3000,
-          });
-        }
-      },
-    });
-  };
-
   const handleClearCart = () => {
     setConfirmModal({
       visible: true,
       title: "Limpar Carrinho",
       message:
-        "Tem certeza que deseja remover todos os itens do seu carrinho da Sans Company?",
+        "Tem certeza que deseja remover todos os itens do seu carrinho?",
       confirmText: "Limpar Carrinho",
       iconName: "delete-sweep",
       confirmColor: "#EF4444",
@@ -288,30 +218,14 @@ export default function CarrinhoScreen({ navigation }) {
 
   const openPaymentUrl = async (paymentData) => {
     try {
-      // Log completo dos dados de pagamento recebidos
-        console.log("💳 Dados completos do pagamento recebidos:",
-        JSON.stringify(paymentData, null, 2)
-      );
-
       // Usar init_point para produção ou sandbox_init_point para desenvolvimento
       // Priorizar produção
       const paymentUrl =
         paymentData.init_point || paymentData.sandbox_init_point;
 
       if (!paymentUrl) {
-        console.error("❌ URLs de pagamento não encontradas:", {
-          init_point: paymentData.init_point,
-          sandbox_init_point: paymentData.sandbox_init_point,
-        });
         throw new Error("URL de pagamento não encontrada na resposta");
       }
-
-        console.log({
-        payment_id: paymentData.payment_id,
-        preference_id: paymentData.preference_id,
-        transaction_amount: paymentData.transaction_amount,
-        status: paymentData.payment?.status,
-      });
 
       // Verificar se a URL pode ser aberta
       const supported = await Linking.canOpenURL(paymentUrl);
@@ -373,10 +287,8 @@ export default function CarrinhoScreen({ navigation }) {
   };
 
   const handleGoToPayment = async () => {
-    // Verificar se há apenas vouchers no carrinho (não precisa de frete físico)
-    const apenasVouchers = cartItems.length === 0 && voucherCartItems.length > 0;
-    const isPickup = deliveryMethod === "PICKUP" && !apenasVouchers;
-    const requiresAddressAndShipping = !apenasVouchers && !isPickup;
+    const isPickup = deliveryMethod === "PICKUP";
+    const requiresAddressAndShipping = !isPickup;
 
     // Validações
     if (requiresAddressAndShipping) {
@@ -442,25 +354,14 @@ export default function CarrinhoScreen({ navigation }) {
         quantidade: item.quantity,
       }));
 
-      // Buscar vouchers do carrinho
-      const voucherCartItems = await CartService.getVoucherCartItems();
-      const vouchers = voucherCartItems.map((item) => ({
-        voucher_id: item.voucher_id,
-        quantidade: item.quantity,
-      }));
-
-      // Verificar se há apenas vouchers (frete grátis)
-      const apenasVouchers = produtos.length === 0 && vouchers.length > 0;
       let taxaEntrega = 0;
       let modalidadeEntrega = "DELIVERY"; // padrão
 
-      if (!apenasVouchers) {
-        if (deliveryMethod === "DELIVERY") {
-          taxaEntrega = selectedFrete?.preco || 0.0;
-        } else {
-          taxaEntrega = 0.0;
-          modalidadeEntrega = "PICKUP";
-        }
+      if (deliveryMethod === "DELIVERY") {
+        taxaEntrega = selectedFrete?.preco || 0.0;
+      } else {
+        taxaEntrega = 0.0;
+        modalidadeEntrega = "PICKUP";
       }
 
       const pedidoPayload = {
@@ -468,16 +369,10 @@ export default function CarrinhoScreen({ navigation }) {
         status: "PENDENTE",
         statusEntrega: "PENDENTE",
         statusPagamento: "PENDING",
-        observacoes: modalidadeEntrega === "PICKUP" ? "Retirar na Barbearia" : "",
+        observacoes: modalidadeEntrega === "PICKUP" ? "Retirar na loja" : "",
         taxa_entrega: taxaEntrega,
         produtos: produtos,
-        vouchers: vouchers,
       };
-
-      // Debug dos dados de pagamento
-        console.log("🔍 PaymentData recebido:",
-        JSON.stringify(paymentData, null, 2)
-      );
 
       const pedidoResponse = await createPedido(pedidoPayload);
 
@@ -525,26 +420,14 @@ export default function CarrinhoScreen({ navigation }) {
       });
 
       // 5. Preparar dados para o modal
-        console.log("🛒 [DEBUG] CarrinhoScreen - selectedFrete antes do modal:",
-        selectedFrete
-      );
 
-      // Para vouchers, criar um objeto de frete simulado se não houver
       let freteParaModal = selectedFrete;
-      
-      if (apenasVouchers) {
-        freteParaModal = {
-          serviceCode: "VOUCHER_DIGITAL",
-          serviceDescription: "Entrega Digital",
-          carrier: "Email",
-          preco: 0,
-          deliveryTime: "Imediata",
-        };
-      } else if (deliveryMethod === "PICKUP") {
+
+      if (deliveryMethod === "PICKUP") {
         freteParaModal = {
           serviceCode: "PICKUP",
-          serviceDescription: "Retirar na Barbearia",
-          carrier: "Barbearia",
+          serviceDescription: "Retirar na loja",
+          carrier: "Loja",
           preco: 0,
           deliveryTime: "Imediata",
         };
@@ -558,10 +441,6 @@ export default function CarrinhoScreen({ navigation }) {
         installments: paymentData.installments || 1,
         paymentResponseData: paymentResponseData,
       };
-
-        console.log("🛒 [DEBUG] CarrinhoScreen - dadosPedido criado:",
-        dadosPedido
-      );
 
       // 6. Mostrar modal de confirmação
       setPedidoConfirmado(dadosPedido);
@@ -586,76 +465,6 @@ export default function CarrinhoScreen({ navigation }) {
     } finally {
       setProcessing(false);
     }
-  };
-  const VoucherItem = ({ item }) => {
-    const mainImage = getVoucherMainImage(item);
-
-    return (
-      <View style={styles.cartItem}>
-        <View style={styles.itemImageContainer}>
-          {mainImage ? (
-            <Image source={{ uri: mainImage }} style={styles.itemImage} />
-          ) : (
-            <View style={styles.noImageContainer}>
-              <MaterialIcons name="card-giftcard" size={32} color="#ccc" />
-            </View>
-          )}
-        </View>
-
-        <View style={styles.itemInfo}>
-          <Text style={styles.itemName} numberOfLines={2}>
-            {item.voucher_name}
-          </Text>
-          <Text style={styles.itemCategory}>
-            {item.partner?.partner_name || "Voucher"}
-          </Text>
-
-          <View style={styles.quantityContainer}>
-            <TouchableOpacity
-              style={[
-                styles.quantityButton,
-                item.quantity === 1 && styles.quantityButtonDisabled,
-              ]}
-              onPress={() =>
-                handleUpdateVoucherQuantity(item.voucher_id, item.quantity - 1)
-              }
-              disabled={item.quantity === 1}
-            >
-              <MaterialIcons
-                name="remove"
-                size={18}
-                color={item.quantity === 1 ? (isDark ? "#555" : "#AAA") : (isDark ? "#FFF" : "#000")}
-              />
-            </TouchableOpacity>
-
-            <Text style={styles.quantityText}>{item.quantity}</Text>
-
-            <TouchableOpacity
-              style={styles.quantityButton}
-              onPress={() =>
-                handleUpdateVoucherQuantity(item.voucher_id, item.quantity + 1)
-              }
-            >
-              <MaterialIcons name="add" size={18} color={isDark ? "#FFF" : "#000"} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.itemActions}>
-          <Text style={styles.itemTotal}>
-            {formatVoucherPrice(item.total_price)}
-          </Text>
-          <TouchableOpacity
-            style={styles.removeButton}
-            onPress={() =>
-              handleRemoveVoucher(item.voucher_id, item.voucher_name)
-            }
-          >
-            <MaterialIcons name="delete" size={20} color="#f44336" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
   };
 
   const CartItem = ({ item }) => {
@@ -726,15 +535,10 @@ export default function CarrinhoScreen({ navigation }) {
   };
 
   const isCheckoutValid = () => {
-    if (cartItems.length === 0 && voucherCartItems.length === 0) return false;
+    if (cartItems.length === 0) return false;
 
-    // Se tiver apenas vouchers, não precisa validar endereço e frete (é entrega digital)
-    const apenasVouchers = cartItems.length === 0 && voucherCartItems.length > 0;
-
-    if (!apenasVouchers) {
-      if (deliveryMethod === "DELIVERY") {
-        if (!selectedEndereco || !selectedFrete) return false;
-      }
+    if (deliveryMethod === "DELIVERY") {
+      if (!selectedEndereco || !selectedFrete) return false;
     }
 
     if (
@@ -751,13 +555,13 @@ export default function CarrinhoScreen({ navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.colors.primary || "#7C4DFF"} />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
         <Text style={styles.loadingText}>Carregando carrinho...</Text>
       </View>
     );
   }
 
-  if (cartItems.length === 0 && voucherCartItems.length === 0) {
+  if (cartItems.length === 0) {
     return (
       <View style={styles.container}>
         {/* Header com botão de voltar para nunca travar o usuário */}
@@ -803,7 +607,7 @@ export default function CarrinhoScreen({ navigation }) {
           </View>
           <Text style={styles.emptyText}>Seu carrinho está vazio</Text>
           <Text style={styles.emptySubtext}>
-            Adicione produtos ou serviços da Sans Company para finalizar sua compra
+            Adicione produtos para finalizar sua compra
           </Text>
           <TouchableOpacity
             style={styles.continueShoppingButton}
@@ -856,8 +660,8 @@ export default function CarrinhoScreen({ navigation }) {
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.itemsHeader}>
           <Text style={styles.itemsCount}>
-            {cartItems.length + voucherCartItems.length}{" "}
-            {cartItems.length + voucherCartItems.length === 1
+            {cartItems.length}{" "}
+            {cartItems.length === 1
               ? "item"
               : "itens"}
           </Text>
@@ -869,16 +673,6 @@ export default function CarrinhoScreen({ navigation }) {
             <Text style={styles.sectionHeader}>Produtos</Text>
             {cartItems.map((item) => (
               <CartItem key={item.product_id} item={item} />
-            ))}
-          </>
-        )}
-
-        {/* Vouchers */}
-        {voucherCartItems.length > 0 && (
-          <>
-            <Text style={styles.sectionHeader}>Vouchers</Text>
-            {voucherCartItems.map((item) => (
-              <VoucherItem key={item.voucher_id} item={item} />
             ))}
           </>
         )}
@@ -930,7 +724,7 @@ export default function CarrinhoScreen({ navigation }) {
                     deliveryMethod === "PICKUP" && styles.deliveryTabTextActive,
                   ]}
                 >
-                  Retirar na Barbearia
+                  Retirar na loja
                 </Text>
               </TouchableOpacity>
             </View>
@@ -950,7 +744,6 @@ export default function CarrinhoScreen({ navigation }) {
               <FreteSelector
                 endereco={selectedEndereco}
                 cartItems={cartItems}
-                voucherCartItems={voucherCartItems}
                 onFreteSelect={setSelectedFrete}
                 selectedFrete={selectedFrete}
               />
@@ -1124,11 +917,11 @@ const getStyles = (theme, isDark, insets) => StyleSheet.create({
     marginBottom: 24,
   },
   continueShoppingButton: {
-    backgroundColor: theme.colors.primary || "#7C4DFF",
+    backgroundColor: theme.colors.primary,
     paddingHorizontal: 28,
     paddingVertical: 14,
     borderRadius: 24,
-    shadowColor: theme.colors.primary || "#7C4DFF",
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1175,8 +968,8 @@ const getStyles = (theme, isDark, insets) => StyleSheet.create({
     gap: 6,
   },
   deliveryTabActive: {
-    backgroundColor: theme.colors.primary || "#7C4DFF",
-    shadowColor: theme.colors.primary || "#7C4DFF",
+    backgroundColor: theme.colors.primary,
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.15,
     shadowRadius: 2,
@@ -1241,7 +1034,7 @@ const getStyles = (theme, isDark, insets) => StyleSheet.create({
   },
   itemPrice: {
     fontSize: 14,
-    color: theme.colors.primary || "#7C4DFF",
+    color: theme.colors.primary,
     fontWeight: "700",
   },
   quantityContainer: {
@@ -1280,7 +1073,7 @@ const getStyles = (theme, isDark, insets) => StyleSheet.create({
   itemTotal: {
     fontSize: 15,
     fontWeight: "800",
-    color: theme.colors.primary || "#7C4DFF",
+    color: theme.colors.primary,
     marginBottom: 12,
   },
   removeButton: {
@@ -1328,16 +1121,16 @@ const getStyles = (theme, isDark, insets) => StyleSheet.create({
   totalValue: {
     fontSize: 22,
     fontWeight: "800",
-    color: theme.colors.primary || "#7C4DFF",
+    color: theme.colors.primary,
   },
   checkoutButton: {
-    backgroundColor: theme.colors.primary || "#7C4DFF",
+    backgroundColor: theme.colors.primary,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     paddingVertical: 16,
     borderRadius: 14,
-    shadowColor: theme.colors.primary || "#7C4DFF",
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

@@ -1,6 +1,7 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import { useTheme } from "../../utils/ThemeContext";
+import { radius } from "../../theme/tokens";
 
 const Card = ({
   children,
@@ -41,7 +42,6 @@ const Card = ({
         styles.base,
         getVariantStyle(),
         getPaddingStyle(),
-        variant === "elevated" && theme.shadows.card,
         style,
       ]}
     >
@@ -52,20 +52,22 @@ const Card = ({
 
 const getStyles = (theme) => StyleSheet.create({
   base: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface,
+    borderRadius: radius.lg,
   },
   // Variants
   elevated: {
-    backgroundColor: theme.colors.card,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.line,
   },
   outlined: {
-    backgroundColor: theme.colors.card,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.line,
   },
   flat: {
-    backgroundColor: theme.colors.secondary,
+    backgroundColor: theme.colors.brandTint,
   },
   // Padding
   paddingNone: {

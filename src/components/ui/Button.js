@@ -6,7 +6,8 @@ import {
   ActivityIndicator,
   View,
 } from "react-native";
-import { theme } from "../../utils/theme";
+import { useTheme } from "../../utils/ThemeContext";
+import { radius, fonts } from "../../theme/tokens";
 
 const Button = ({
   title,
@@ -21,6 +22,9 @@ const Button = ({
   style,
   textStyle,
 }) => {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+
   const getVariantStyle = () => {
     switch (variant) {
       case "secondary":
@@ -77,7 +81,6 @@ const Button = ({
         getSizeStyle(),
         fullWidth && styles.fullWidth,
         disabled && styles.disabled,
-        variant === "primary" && !disabled && theme.shadows.button,
         style,
       ]}
       onPress={onPress}
@@ -87,7 +90,7 @@ const Button = ({
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variant === "primary" ? "#FFF" : theme.colors.primary}
+          color={variant === "primary" ? theme.colors.onBrand : theme.colors.primary}
         />
       ) : (
         <View style={styles.content}>
@@ -106,9 +109,9 @@ const Button = ({
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   base: {
-    borderRadius: theme.borderRadius.md,
+    borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -126,12 +129,14 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
   },
   secondary: {
-    backgroundColor: theme.colors.secondary,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.line,
   },
   outline: {
     backgroundColor: "transparent",
     borderWidth: 1.5,
-    borderColor: theme.colors.primary,
+    borderColor: theme.colors.brand,
   },
   ghost: {
     backgroundColor: "transparent",
@@ -151,10 +156,10 @@ const styles = StyleSheet.create({
   },
   // Text styles
   text: {
-    fontWeight: "600",
+    fontFamily: fonts.textBold,
   },
   textPrimary: {
-    color: "#FFFFFF",
+    color: theme.colors.onBrand,
   },
   textSecondary: {
     color: theme.colors.textPrimary,
@@ -166,10 +171,10 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
   },
   textSm: {
-    fontSize: 13,
+    fontSize: 14,
   },
   textMd: {
-    fontSize: 15,
+    fontSize: 16,
   },
   textLg: {
     fontSize: 17,

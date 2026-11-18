@@ -2,17 +2,18 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { View, StyleSheet, Platform, Text } from "react-native";
-import MaterialIcons from "react-native-vector-icons/MaterialIcons";
-import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { theme } from "../utils/theme";
 import {
   useSafeAreaInsets,
   SafeAreaView,
 } from "react-native-safe-area-context";
 import { useTheme } from "../utils/ThemeContext";
+import { ROUTES } from "../navigation/routes";
+import Icon from "../components/ui/Icon";
+import { fonts, radius } from "../theme/tokens";
 
-// Sans Company Screens
-import BarberScreen from "./BarberScreen";
+// Telas
+import AgendarScreen from "./agendar/AgendarScreen";
 import PerfilScreen from "./PerfilScreen";
 import AppointmentSuccessScreen from "./AppointmentSuccessScreen";
 import HistoricoAgendamentosScreen from "./HistoricoAgendamentosScreen";
@@ -30,18 +31,18 @@ const Stack = createStackNavigator();
 // Custom Tab Bar Icon
 const TabIcon = ({ name, focused, theme, styles }) => {
   const getIcon = () => {
-    const color = focused ? "#FFFFFF" : theme.colors.textMuted;
+    const color = focused ? theme.colors.onBrand : theme.colors.textMuted;
     const size = focused ? 24 : 22;
 
     switch (name) {
-      case "Barber":
-        return <MaterialCommunityIcons name="content-cut" size={size} color={color} />;
-      case "Loja":
-        return <MaterialIcons name="local-mall" size={size} color={color} />;
-      case "Perfil":
-        return <MaterialIcons name="person" size={size} color={color} />;
+      case ROUTES.Agendar:
+        return <Icon name="calendar" size={size} color={color} />;
+      case ROUTES.Loja:
+        return <Icon name="shopping-bag" size={size} color={color} />;
+      case ROUTES.Perfil:
+        return <Icon name="user" size={size} color={color} />;
       default:
-        return <MaterialIcons name="help" size={size} color={color} />;
+        return <Icon name="help-circle" size={size} color={color} />;
     }
   };
 
@@ -83,17 +84,17 @@ const MainTabs = () => {
       })}
     >
       <Tab.Screen
-        name="Barber"
-        component={BarberScreen}
-        options={{ tabBarLabel: "Barber" }}
+        name={ROUTES.Agendar}
+        component={AgendarScreen}
+        options={{ tabBarLabel: "Agendar" }}
       />
       <Tab.Screen
-        name="Loja"
+        name={ROUTES.Loja}
         component={ProductsStack}
         options={{ tabBarLabel: "Loja" }}
       />
       <Tab.Screen
-        name="Perfil"
+        name={ROUTES.Perfil}
         component={PerfilScreen}
         options={{ tabBarLabel: "Perfil" }}
       />
@@ -116,9 +117,9 @@ const Navigator = () => {
             cardStyle: { backgroundColor: theme.colors.background },
           }}
         >
-          <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen name={ROUTES.MainTabs} component={MainTabs} />
           <Stack.Screen
-            name="AppointmentSuccess"
+            name={ROUTES.AppointmentSuccess}
             component={AppointmentSuccessScreen}
             options={{
               presentation: "modal",
@@ -126,33 +127,33 @@ const Navigator = () => {
             }}
           />
           <Stack.Screen
-            name="HistoricoAgendamentos"
+            name={ROUTES.HistoricoAgendamentos}
             component={HistoricoAgendamentosScreen}
           />
           <Stack.Screen
-            name="AlterarSenha"
+            name={ROUTES.AlterarSenha}
             component={AlterarSenhaScreen}
           />
           <Stack.Screen
-            name="MeusPedidos"
+            name={ROUTES.MeusPedidos}
             component={MeusPedidosStack}
           />
           <Stack.Screen
-            name="Carrinho"
+            name={ROUTES.Carrinho}
             component={CarrinhoScreen}
           />
           <Stack.Screen
-            name="PrizeScanner"
+            name={ROUTES.PrizeScanner}
             component={PrizeScannerScreen}
             options={{ presentation: "modal" }}
           />
           <Stack.Screen
-            name="RedemptionSuccess"
+            name={ROUTES.RedemptionSuccess}
             component={RedemptionSuccessScreen}
             options={{ gestureEnabled: false }}
           />
           <Stack.Screen
-            name="MinhaJornada"
+            name={ROUTES.MinhaJornada}
             component={MinhaJornadaScreen}
           />
         </Stack.Navigator>
@@ -173,10 +174,6 @@ const getStyles = (theme) => StyleSheet.create({
       width: '100%',
       alignSelf: 'center',
       backgroundColor: theme.colors.background,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.05,
-      shadowRadius: 30,
       borderLeftWidth: 1,
       borderRightWidth: 1,
       borderColor: theme.colors.border,
@@ -184,17 +181,13 @@ const getStyles = (theme) => StyleSheet.create({
   },
   tabBar: {
     backgroundColor: theme.colors.background,
-    borderTopWidth: 0,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.line,
     paddingTop: 12,
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
   },
   tabBarLabel: {
+    fontFamily: fonts.textSemi,
     fontSize: 11,
-    fontWeight: "600",
     marginTop: 6,
   },
   tabIconContainer: {
@@ -202,12 +195,11 @@ const getStyles = (theme) => StyleSheet.create({
     justifyContent: "center",
     width: 56,
     height: 40,
-    borderRadius: 16,
+    borderRadius: radius.pill,
     marginTop: -4,
   },
   tabIconFocused: {
     backgroundColor: theme.colors.primary,
-    ...theme.shadows.button,
   },
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,17 +7,17 @@ import {
   TouchableOpacity,
   Image,
   RefreshControl,
-  Linking,
+  
   Platform
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
-import { getMyRedemptions, getProfile } from "../api/barberApi";
+import { getMyRedemptions, getProfile } from "../api/legado";
 import { createTextStyle } from "../utils/theme";
 import { useTheme } from "../utils/ThemeContext";
 import Skeleton from "../components/ui/Skeleton";
-import CoinIcon from "../components/ui/CoinIcon";
+import PointsIcon from "../components/ui/PointsIcon";
 import { useAuth } from "../components/AuthProvider";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -62,21 +62,16 @@ const MinhaJornadaScreen = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const isClubeSans = profile?.clube_sans;
+  const isClubMember = profile?.club_member;
 
-  const mockData = [
-    { redemption_id: 'f1', prize: { name: 'Cerveja Artesanal', icon_url: null, coins: 300 }, redeemed_at: new Date(Date.now() - 86400000 * 2) },
-    { redemption_id: 'f2', prize: { name: 'Pomada Modeladora', icon_url: null, coins: 500 }, redeemed_at: new Date(Date.now() - 86400000 * 5) }
-  ];
-
-  const dataToRender = !isClubeSans ? mockData : redemptions;
+  const dataToRender = isClubMember ? redemptions : [];
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
       <MaterialIcons name="timeline" size={64} color={theme.colors.textMuted} />
       <Text style={styles.emptyTitle}>Sua jornada de prêmios começa aqui.</Text>
       <Text style={styles.emptySubtitle}>
-        Resgate prêmios na barbearia e eles aparecerão no seu histórico.
+        Resgate prêmios e eles aparecerão no seu histórico.
       </Text>
     </View>
   );
@@ -101,9 +96,9 @@ const MinhaJornadaScreen = ({ navigation }) => {
       </View>
       <View style={styles.jornadaPoints}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <CoinIcon size={16} />
+          <PointsIcon size={16} />
           <Text style={[styles.jornadaPointsText, { marginLeft: 4 }]}>
-            {item.prize?.coins_cost || item.prize?.coins}
+            {item.prize?.points_cost || item.prize?.points}
           </Text>
         </View>
       </View>
@@ -184,7 +179,7 @@ const MinhaJornadaScreen = ({ navigation }) => {
           ListEmptyComponent={renderEmptyState}
         />
 
-        {(!isClubeSans) && (
+        {(!isClubMember) && (
           <View style={styles.clubeOverlay}>
             <BlurView intensity={themeMode === 'dark' ? 30 : 10} tint={themeMode === 'dark' ? 'dark' : 'light'} style={styles.blurContainer} />
             <View style={styles.clubeOverlayContent}>
@@ -193,17 +188,8 @@ const MinhaJornadaScreen = ({ navigation }) => {
               </View>
               <Text style={styles.clubeOverlayTitle}>Histórico Reservado</Text>
               <Text style={styles.clubeOverlayText}>
-                Apenas membros do Clube Sans acompanham sua evolução e resgates exclusivos.
+                Só quem é do clube acompanha a evolução e os resgates.
               </Text>
-              <TouchableOpacity
-                style={styles.clubeCTAButton}
-                onPress={() => {
-                  const message = encodeURIComponent("Olá! Gostaria de saber mais sobre como fazer parte do Clube Sans!");
-                  Linking.openURL(`whatsapp://send?phone=5541997355454&text=${message}`);
-                }}
-              >
-                <Text style={styles.clubeCTAButtonText}>QUERO SER CLUBE SANS</Text>
-              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -295,7 +281,7 @@ const getStyles = (theme, isDarkMode, themeMode) => StyleSheet.create({
   jornadaPointsText: {
     fontSize: 14,
     fontWeight: '700',
-    color: theme.isDarkMode ? '#FFD700' : '#B8860B',
+    color: theme.colors.textPrimary,
   },
   emptyState: {
     flex: 1,
@@ -357,17 +343,6 @@ const getStyles = (theme, isDarkMode, themeMode) => StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
     paddingHorizontal: 20,
-  },
-  clubeCTAButton: {
-    backgroundColor: theme.colors.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderRadius: 24,
-  },
-  clubeCTAButtonText: {
-    color: '#FFF',
-    fontSize: 13,
-    fontWeight: '800',
   },
 });
 

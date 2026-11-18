@@ -1,10 +1,12 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import CoinIcon from "./CoinIcon";
+import PointsIcon from "./PointsIcon";
 import { useTheme } from "../../utils/ThemeContext";
+import { fonts } from "../../theme/tokens";
 
-const SansCoinsDisplay = ({
+const PointsDisplay = ({
   amount,
+  label, // nome dos pontos na conta (vem de quem chama)
   size = "md", // sm, md, lg
   showIcon = true,
   style,
@@ -29,12 +31,12 @@ const SansCoinsDisplay = ({
   return (
     <View style={[styles.container, style]}>
       {showIcon && (
-        <CoinIcon size={sizeConfig.iconSize} style={styles.imageIconContainer} />
+        <PointsIcon size={sizeConfig.iconSize} style={styles.imageIconContainer} />
       )}
-      <Text style={[styles.amount, { fontSize: sizeConfig.fontSize, color: theme.isDarkMode ? '#FFD700' : '#B8860B' }]}>
+      <Text style={[styles.amount, { fontSize: sizeConfig.fontSize }]}>
         {displayAmount}
       </Text>
-      {size === "lg" && <Text style={styles.label}>Sans Coins</Text>}
+      {size === "lg" && !!label && <Text style={styles.label}>{label}</Text>}
     </View>
   );
 };
@@ -50,13 +52,15 @@ const getStyles = (theme) => StyleSheet.create({
     alignItems: "center",
   },
   amount: {
-    fontWeight: "700",
+    fontFamily: fonts.display,
+    color: theme.colors.ink,
   },
   label: {
+    fontFamily: fonts.textMedium,
     fontSize: 12,
     color: theme.colors.textMuted,
     marginLeft: 4,
   },
 });
 
-export default SansCoinsDisplay;
+export default PointsDisplay;

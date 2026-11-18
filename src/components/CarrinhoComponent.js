@@ -13,7 +13,6 @@ import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { useTheme } from "../utils/ThemeContext";
 import { CartService } from "../services/cartService";
 import { formatPrice, getProductMainImage } from "../api/products";
-import { formatVoucherPrice, getVoucherMainImage } from "../api/vouchers";
 import Toast from "react-native-toast-message";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ConfirmModal from "./ConfirmModal";
@@ -24,7 +23,6 @@ export default function CarrinhoComponent({ visible, onClose, onGoToCart }) {
   const styles = getStyles(theme, isDark);
 
   const [cartItems, setCartItems] = useState([]);
-  const [voucherCartItems, setVoucherCartItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [confirmModal, setConfirmModal] = useState({
@@ -46,10 +44,8 @@ export default function CarrinhoComponent({ visible, onClose, onGoToCart }) {
     try {
       setLoading(true);
       const items = await CartService.getCartItems();
-      const voucherItems = await CartService.getVoucherCartItems();
       const grandTotal = await CartService.getGrandTotal();
       setCartItems(items);
-      setVoucherCartItems(voucherItems);
       setTotal(grandTotal);
     } catch (error) {
       console.error("Erro ao carregar carrinho:", error);
@@ -108,52 +104,6 @@ export default function CarrinhoComponent({ visible, onClose, onGoToCart }) {
             type: "error",
             text1: "Erro",
             text2: "Não foi possível remover o produto",
-            visibilityTime: 3000,
-          });
-        }
-      },
-    });
-  };
-
-  const handleUpdateVoucherQuantity = async (voucherId, newQuantity) => {
-    try {
-      await CartService.updateVoucherQuantity(voucherId, newQuantity);
-      await loadCartItems();
-    } catch (error) {
-      console.error("Erro ao atualizar voucher:", error);
-      Toast.show({
-        type: "error",
-        text1: "Erro",
-        text2: "Não foi possível atualizar o voucher",
-        visibilityTime: 3000,
-      });
-    }
-  };
-
-  const handleRemoveVoucher = (voucherId, voucherName) => {
-    setConfirmModal({
-      visible: true,
-      title: "Remover Voucher",
-      message: `Deseja remover o voucher "${voucherName}" do carrinho?`,
-      confirmText: "Remover",
-      onConfirm: async () => {
-        try {
-          setConfirmModal((prev) => ({ ...prev, loading: true }));
-          await CartService.removeVoucherFromCart(voucherId);
-          await loadCartItems();
-          setConfirmModal((prev) => ({ ...prev, visible: false, loading: false }));
-          Toast.show({
-            type: "success",
-            text1: "Voucher removido",
-            visibilityTime: 2000,
-          });
-        } catch (error) {
-          console.error("Erro ao remover voucher:", error);
-          setConfirmModal((prev) => ({ ...prev, loading: false }));
-          Toast.show({
-            type: "error",
-            text1: "Erro",
-            text2: "Não foi possível remover o voucher",
             visibilityTime: 3000,
           });
         }
@@ -257,75 +207,6 @@ export default function CarrinhoComponent({ visible, onClose, onGoToCart }) {
     );
   };
 
-  const VoucherItem = ({ item }) => {
-    const mainImage = getVoucherMainImage(item);
-
-    return (
-      <View style={styles.cartItem}>
-        <View style={styles.itemImageContainer}>
-          {mainImage ? (
-            <Image source={{ uri: mainImage }} style={styles.itemImage} />
-          ) : (
-            <View style={styles.noImageContainer}>
-              <MaterialIcons name="card-giftcard" size={24} color={isDark ? "#555" : "#ccc"} />
-            </View>
-          )}
-        </View>
-
-        <View style={styles.itemInfo}>
-          <Text style={styles.itemName} numberOfLines={2}>
-            {item.voucher_name}
-          </Text>
-          <Text style={styles.partnerName}>
-            {item.partner?.partner_name || "Parceiro"}
-          </Text>
-
-          <View style={styles.quantityContainer}>
-            <TouchableOpacity
-              style={[
-                styles.quantityButton,
-                item.quantity === 1 && styles.quantityButtonDisabled,
-              ]}
-              onPress={() =>
-                handleUpdateVoucherQuantity(item.voucher_id, item.quantity - 1)
-              }
-              disabled={item.quantity === 1}
-            >
-              <MaterialIcons
-                name="remove"
-                size={16}
-                color={item.quantity === 1 ? (isDark ? "#555" : "#AAA") : (isDark ? "#FFF" : "#000")}
-              />
-            </TouchableOpacity>
-
-            <Text style={styles.quantityText}>{item.quantity}</Text>
-
-            <TouchableOpacity
-              style={styles.quantityButton}
-              onPress={() =>
-                handleUpdateVoucherQuantity(item.voucher_id, item.quantity + 1)
-              }
-            >
-              <MaterialIcons name="add" size={16} color={isDark ? "#FFF" : "#000"} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.itemActions}>
-          <Text style={styles.itemTotal}>
-            {formatVoucherPrice(item.total_price)}
-          </Text>
-          <TouchableOpacity
-            style={styles.removeButton}
-            onPress={() => handleRemoveVoucher(item.voucher_id, item.voucher_name)}
-          >
-            <MaterialIcons name="delete" size={18} color="#f44336" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
   return (
     <Modal
       visible={visible}
@@ -353,10 +234,10 @@ export default function CarrinhoComponent({ visible, onClose, onGoToCart }) {
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary || "#7C4DFF"} />
+            <ActivityIndicator size="large" color={theme.colors.primary} />
             <Text style={styles.loadingText}>Carregando carrinho...</Text>
           </View>
-        ) : cartItems.length === 0 && voucherCartItems.length === 0 ? (
+        ) : cartItems.length === 0 ? (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconCircle}>
               <MaterialIcons
@@ -367,7 +248,7 @@ export default function CarrinhoComponent({ visible, onClose, onGoToCart }) {
             </View>
             <Text style={styles.emptyText}>Seu carrinho está vazio</Text>
             <Text style={styles.emptySubtext}>
-              Adicione produtos ou vouchers para ver aqui
+              Adicione produtos para ver aqui
             </Text>
             <TouchableOpacity
               style={styles.emptyButton}
@@ -386,16 +267,6 @@ export default function CarrinhoComponent({ visible, onClose, onGoToCart }) {
                   <Text style={styles.sectionHeader}>Produtos</Text>
                   {cartItems.map((item) => (
                     <CartItem key={item.product_id} item={item} />
-                  ))}
-                </>
-              )}
-
-              {/* Vouchers */}
-              {voucherCartItems.length > 0 && (
-                <>
-                  <Text style={styles.sectionHeader}>Vouchers</Text>
-                  {voucherCartItems.map((item) => (
-                    <VoucherItem key={item.voucher_id} item={item} />
                   ))}
                 </>
               )}
@@ -520,11 +391,11 @@ const getStyles = (theme, isDark) => StyleSheet.create({
     marginBottom: 20,
   },
   emptyButton: {
-    backgroundColor: theme.colors.primary || "#7C4DFF",
+    backgroundColor: theme.colors.primary,
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
-    shadowColor: theme.colors.primary || "#7C4DFF",
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -624,7 +495,7 @@ const getStyles = (theme, isDark) => StyleSheet.create({
   itemTotal: {
     fontSize: 15,
     fontWeight: "800",
-    color: theme.colors.primary || "#7C4DFF",
+    color: theme.colors.primary,
     marginBottom: 8,
   },
   removeButton: {
@@ -652,16 +523,16 @@ const getStyles = (theme, isDark) => StyleSheet.create({
   totalValue: {
     fontSize: 22,
     fontWeight: "800",
-    color: theme.colors.primary || "#7C4DFF",
+    color: theme.colors.primary,
   },
   checkoutButton: {
-    backgroundColor: theme.colors.primary || "#7C4DFF",
+    backgroundColor: theme.colors.primary,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     paddingVertical: 16,
     borderRadius: 14,
-    shadowColor: theme.colors.primary || "#7C4DFF",
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

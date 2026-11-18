@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import CoinIcon from "../components/ui/CoinIcon";
+import PointsIcon from "../../components/ui/PointsIcon";
 import {
   View,
   Text,
@@ -20,16 +20,16 @@ import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
-import { theme } from "../utils/theme";
-import { useTheme } from "../utils/ThemeContext";
-import { parseBackendDate, formatDateForBackend } from "../utils/dateUtils";
-import Card from "../components/ui/Card";
-import Avatar from "../components/ui/Avatar";
-import Button from "../components/ui/Button";
-import SansCoinsDisplay from "../components/ui/SansCoinsDisplay";
-import SectionHeader from "../components/ui/SectionHeader";
-import Chip from "../components/ui/Chip";
-import Skeleton from "../components/ui/Skeleton";
+import { theme } from "../../utils/theme";
+import { useTheme } from "../../utils/ThemeContext";
+import { parseBackendDate, formatDateForBackend } from "../../utils/dateUtils";
+import Card from "../../components/ui/Card";
+import Avatar from "../../components/ui/Avatar";
+import Button from "../../components/ui/Button";
+import PointsDisplay from "../../components/ui/PointsDisplay";
+import SectionHeader from "../../components/ui/SectionHeader";
+import Chip from "../../components/ui/Chip";
+import Skeleton from "../../components/ui/Skeleton";
 // mockData removido
 
 import {
@@ -44,26 +44,27 @@ import {
   cancelMyAppointment,
   rescheduleMyAppointment,
   getBanners,
-} from "../api/barberApi";
-import { useAuth } from "../components/AuthProvider";
+} from "../../api/legado";
+import { useAuth } from "../../components/AuthProvider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Toast from "react-native-toast-message";
 
 const { width } = Dimensions.get("window");
 
-const BarberScreen = ({ navigation }) => {
+const AgendarScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { theme, isDarkMode, reloadLogos } = useTheme();
+  const { theme, isDarkMode } = useTheme();
   const BANNER_WIDTH = theme.isTablet ? width - 80 : width - 48;
   const styles = getStyles(theme);
   const scrollX = useRef(new Animated.Value(0)).current;
   const { isAuthenticated } = useAuth();
   const [currentUser, setCurrentUser] = useState({
-    name: "Sans Company",
-    sansCoins: 0,
-    clubeSans: false,
+    name: "",
+    points: 0,
+    clubMember: false,
   });
-  const [barbers, setBarbers] = useState([]);
-  const [barberServices, setBarberServices] = useState([]);
+  const [professionals, setProfessionals] = useState([]);
+  const [professionalServices, setProfessionalServices] = useState([]);
   const [prizes, setPrizes] = useState([]);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [occupiedSlots, setOccupiedSlots] = useState([]);
@@ -72,7 +73,7 @@ const BarberScreen = ({ navigation }) => {
   const [nextAppointment, setNextAppointmentState] = useState(null);
   const [banners, setBanners] = useState([]);
   const [submitting, setSubmitting] = useState(false);
-  const [selectedBarber, setSelectedBarber] = useState(null);
+  const [selectedProfessional, setSelectedProfessional] = useState(null);
   const [selectedService, setSelectedService] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
@@ -88,13 +89,13 @@ const BarberScreen = ({ navigation }) => {
   // O recarregamento ao voltar para a tela foi removido para otimizar requisições e não apagar a seleção do usuário
 
   useEffect(() => {
-    if (selectedBarber && selectedDate && selectedService) {
+    if (selectedProfessional && selectedDate && selectedService) {
       fetchAvailability();
     } else {
       setAvailableSlots([]);
       setSelectedTime(null);
     }
-  }, [selectedBarber, selectedDate, selectedService]);
+  }, [selectedProfessional, selectedDate, selectedService]);
 
   // Gerar próximos 7 dias
   const getNextDays = () => {
@@ -138,7 +139,6 @@ const BarberScreen = ({ navigation }) => {
       isAuthenticated ? loadUserBalanceAndNext() : Promise.resolve(),
       loadCatalog(),
       loadBanners(),
-      reloadLogos ? reloadLogos() : Promise.resolve(),
     ]);
   };
 
@@ -150,7 +150,7 @@ const BarberScreen = ({ navigation }) => {
 
   const loadUserBalanceAndNext = async () => {
     if (!isAuthenticated) {
-      setCurrentUser((prev) => ({ ...prev, sansCoins: 0 }));
+      setCurrentUser((prev) => ({ ...prev, points: 0 }));
       setNextAppointmentState(null);
       return;
     }
@@ -158,11 +158,11 @@ const BarberScreen = ({ navigation }) => {
     try {
       // Get profile returns full user data
       const user = await getProfile();
-      const coins = user?.user_coins_balance ?? 0;
+      const points = user?.user_points_balance ?? 0;
       setCurrentUser((prev) => ({
         ...prev,
-        sansCoins: coins,
-        clubeSans: user?.clube_sans || false,
+        points: points,
+        clubMember: user?.club_member || false,
       }));
     } catch (err) {}
 
@@ -194,20 +194,20 @@ const BarberScreen = ({ navigation }) => {
         getPrizes().catch(() => []),
       ]);
 
-      const mappedBarbers = (pros || [])
+      const mappedProfessionals = (pros || [])
         .filter((p) => p.active !== false)
         .map((p) => ({
           id: String(p.professional_id),
           professional_id: p.professional_id,
           name: p.name,
           avatar: p.avatar_url,
-          specialty: p.bio || "Barbeiro",
+          specialty: p.bio || "Profissional",
           rating: p.rating || 5,
           status: "online",
         }));
 
-      if (mappedBarbers.length > 0) {
-        mappedBarbers.unshift({
+      if (mappedProfessionals.length > 0) {
+        mappedProfessionals.unshift({
           id: "any",
           professional_id: "any",
           name: "Qualquer Profissional",
@@ -229,16 +229,16 @@ const BarberScreen = ({ navigation }) => {
         icon: s.icon || "content-cut",
       }));
 
-      setBarbers(mappedBarbers);
-      setBarberServices(mappedServices);
+      setProfessionals(mappedProfessionals);
+      setProfessionalServices(mappedServices);
 
       const mappedPrizes = (fetchedPrizes || []).map((p, index) => {
-        const colors = ["#8b5cf6", "#10b981", "#f59e0b", "#ec4899", "#3b82f6"];
+        const colors = ["#0B6E66", "#10b981", "#f59e0b", "#ec4899", "#3b82f6"];
         return {
           id: String(p.prize_id),
           prize_id: p.prize_id,
           name: p.name,
-          coins: p.coins_cost,
+          points: p.points_cost,
           icon_url: p.icon_url,
           color: colors[index % colors.length],
         };
@@ -250,8 +250,8 @@ const BarberScreen = ({ navigation }) => {
         text1: "Erro de Conexão",
         text2: err.message || "Falha na rede. Verifique sua conexão com a internet.",
       });
-      setBarbers([]);
-      setBarberServices([]);
+      setProfessionals([]);
+      setProfessionalServices([]);
       setPrizes([]);
     } finally {
       setLoading(false);
@@ -274,7 +274,7 @@ const BarberScreen = ({ navigation }) => {
       id: appt.appointment_id,
       professional_id: appt.professional?.professional_id || appt.professional_id,
       service_id: appt.service?.service_id || appt.service_id,
-      barber: {
+      professional: {
         id: appt.professional?.professional_id || appt.professional_id,
         name: appt.professional?.name || "",
         avatar: appt.professional?.avatar_url,
@@ -299,10 +299,10 @@ const BarberScreen = ({ navigation }) => {
   };
 
   const fetchAvailability = async () => {
-    if (!selectedBarber || !selectedDate || !selectedService) return;
+    if (!selectedProfessional || !selectedDate || !selectedService) return;
     setLoadingSlots(true);
     try {
-      const pId = selectedBarber.professional_id || selectedBarber.id;
+      const pId = selectedProfessional.professional_id || selectedProfessional.id;
       const response = await getAvailability({
         professionalId: pId === "any" ? "any" : Number(pId),
         date: formatDateParam(selectedDate.date),
@@ -337,7 +337,7 @@ const BarberScreen = ({ navigation }) => {
   };
 
   const handleConfirmAppointment = async () => {
-    if (!selectedBarber || !selectedService || !selectedDate || !selectedTime) {
+    if (!selectedProfessional || !selectedService || !selectedDate || !selectedTime) {
       return;
     }
 
@@ -370,13 +370,13 @@ const BarberScreen = ({ navigation }) => {
       const scheduledIsoString = formatDateForBackend(selectedDate.date, selectedTime.time);
 
       let finalProfessionalId = Number(
-        selectedBarber.professional_id || selectedBarber.id,
+        selectedProfessional.professional_id || selectedProfessional.id,
       );
-      if (selectedBarber.id === "any") {
+      if (selectedProfessional.id === "any") {
         finalProfessionalId = providerMap[selectedTime.time];
         if (!finalProfessionalId) {
           const msg =
-            "Não foi possível alocar um barbeiro para este horário. Escolha outro horário ou recarregue a página.";
+            "Não foi possível alocar um profissional para este horário. Escolha outro horário ou recarregue a página.";
           if (Platform.OS === "web") {
             window.alert(msg);
           } else {
@@ -408,7 +408,7 @@ const BarberScreen = ({ navigation }) => {
       setNextAppointmentState(formatAppointment(appointment));
       const wasRescheduling = isRescheduling;
       setIsRescheduling(false);
-      setSelectedBarber(null);
+      setSelectedProfessional(null);
       setSelectedService(null);
       setSelectedDate(null);
       setSelectedTime(null);
@@ -431,13 +431,13 @@ const BarberScreen = ({ navigation }) => {
       setSubmitting(false);
       const msg =
         err.response?.data?.error ||
-        "Não foi possível agendar. Tente outro horário ou fale com a barbearia.";
+        "Não foi possível agendar. Tente outro horário ou fale com a loja.";
       if (Platform.OS === "web") {
         window.alert(typeof msg === "string" ? msg : JSON.stringify(msg));
       } else {
         Alert.alert(
           "Não foi possível agendar",
-          typeof msg === "string" ? msg : "Tente outro horário ou fale com a barbearia.",
+          typeof msg === "string" ? msg : "Tente outro horário ou fale com a loja.",
         );
       }
     }
@@ -447,25 +447,25 @@ const BarberScreen = ({ navigation }) => {
     if (!nextAppointment) return;
 
     // Tentar selecionar o profissional atual
-    const targetBarberId = nextAppointment.professional_id || nextAppointment.barber?.id;
-    const foundBarber = barbers.find(
-      (b) => String(b.id || b.professional_id) === String(targetBarberId)
+    const targetProfessionalId = nextAppointment.professional_id || nextAppointment.professional?.id;
+    const foundProfessional = professionals.find(
+      (b) => String(b.id || b.professional_id) === String(targetProfessionalId)
     );
-    if (foundBarber) {
-      setSelectedBarber(foundBarber);
-    } else if (barbers.length > 0) {
-      setSelectedBarber(barbers[0]);
+    if (foundProfessional) {
+      setSelectedProfessional(foundProfessional);
+    } else if (professionals.length > 0) {
+      setSelectedProfessional(professionals[0]);
     }
 
     // Tentar selecionar o serviço atual
     const targetServiceId = nextAppointment.service_id || nextAppointment.service?.id;
-    const foundService = barberServices.find(
+    const foundService = professionalServices.find(
       (s) => String(s.id || s.service_id) === String(targetServiceId)
     );
     if (foundService) {
       setSelectedService(foundService);
-    } else if (barberServices.length > 0) {
-      setSelectedService(barberServices[0]);
+    } else if (professionalServices.length > 0) {
+      setSelectedService(professionalServices[0]);
     }
 
     setSelectedDate(null);
@@ -479,7 +479,7 @@ const BarberScreen = ({ navigation }) => {
 
   const handleCancelReschedule = () => {
     setIsRescheduling(false);
-    setSelectedBarber(null);
+    setSelectedProfessional(null);
     setSelectedService(null);
     setSelectedDate(null);
     setSelectedTime(null);
@@ -580,14 +580,14 @@ const BarberScreen = ({ navigation }) => {
     );
   };
 
-  const renderBarber = ({ item }) => {
+  const renderProfessional = ({ item }) => {
     const isAny = item.id === "any";
-    const isSelected = selectedBarber?.id === item.id;
+    const isSelected = selectedProfessional?.id === item.id;
     return (
       <TouchableOpacity
-        style={[styles.barberCard, isSelected && styles.barberCardSelected]}
+        style={[styles.professionalCard, isSelected && styles.professionalCardSelected]}
         onPress={() => {
-          setSelectedBarber(item);
+          setSelectedProfessional(item);
           setSelectedTime(null);
           setTimeout(() => {
             scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -623,19 +623,19 @@ const BarberScreen = ({ navigation }) => {
         )}
         <Text
           style={[
-            styles.barberName,
+            styles.professionalName,
             isAny && { color: theme.colors.primary, fontWeight: "bold" },
           ]}
         >
           {item.name}
         </Text>
         {item.specialty ? (
-          <Text style={styles.barberSpecialty} numberOfLines={1} ellipsizeMode="tail">{item.specialty}</Text>
+          <Text style={styles.professionalSpecialty} numberOfLines={1} ellipsizeMode="tail">{item.specialty}</Text>
         ) : null}
 
         {!isAny && (
-          <View style={styles.barberRating}>
-            <MaterialIcons name="star" size={14} color="#FFD700" />
+          <View style={styles.professionalRating}>
+            <MaterialIcons name="star" size={14} color="#F2A93B" />
             <Text style={styles.ratingText}>{item.rating}</Text>
           </View>
         )}
@@ -659,9 +659,9 @@ const BarberScreen = ({ navigation }) => {
       }}
       activeOpacity={0.7}
     >
-      {currentUser?.clubeSans && item.reward_points > 0 && (
+      {currentUser?.clubMember && item.reward_points > 0 && (
         <View style={styles.serviceRewardBadge}>
-          <CoinIcon size={12} />
+          <PointsIcon size={12} />
           <Text style={styles.serviceRewardText}>+{item.reward_points}</Text>
         </View>
       )}
@@ -784,28 +784,28 @@ const BarberScreen = ({ navigation }) => {
       );
       return;
     }
-    if (!currentUser.clubeSans) {
+    if (!currentUser.clubMember) {
       if (Platform.OS === "web") {
         window.alert(
-          "Apenas membros do Clube Sans podem resgatar prêmios incríveis!"
+          "Só quem é do clube pode resgatar prêmios."
         );
       } else {
         Alert.alert(
-          "Clube Sans",
-          "Apenas membros do Clube Sans podem resgatar prêmios incríveis!",
+          "Clube",
+          "Só quem é do clube pode resgatar prêmios.",
         );
       }
       return;
     }
-    if (currentUser.sansCoins < item.coins) {
+    if (currentUser.points < item.points) {
       if (Platform.OS === "web") {
         window.alert(
-          `Você precisa de ${item.coins} Sans Coins para resgatar este prêmio.`
+          `Você precisa de ${item.points} pontos para resgatar este prêmio.`
         );
       } else {
         Alert.alert(
           "Saldo Insuficiente",
-          `Você precisa de ${item.coins} Sans Coins para resgatar este prêmio.`,
+          `Você precisa de ${item.points} pontos para resgatar este prêmio.`,
         );
       }
       return;
@@ -814,30 +814,30 @@ const BarberScreen = ({ navigation }) => {
   };
 
   const renderPrize = ({ item }) => {
-    const insufficientCoins =
-      (currentUser?.sansCoins || 0) < (item.coins_cost || item.coins);
+    const insufficientPoints =
+      (currentUser?.points || 0) < (item.points_cost || item.points);
 
     return (
       <TouchableOpacity
         style={[
           styles.prizeCard,
           {
-            borderColor: insufficientCoins
+            borderColor: insufficientPoints
               ? theme.isDarkMode
                 ? theme.colors.borderLight
                 : "#F0F0F0"
               : item.color + "40",
           },
-          insufficientCoins && styles.prizeCardDisabled,
+          insufficientPoints && styles.prizeCardDisabled,
         ]}
-        activeOpacity={insufficientCoins ? 0.6 : 0.8}
+        activeOpacity={insufficientPoints ? 0.6 : 0.8}
         onPress={() => handlePrizePress(item)}
       >
         <View
           style={[
             styles.prizeIconContainer,
             {
-              backgroundColor: insufficientCoins
+              backgroundColor: insufficientPoints
                 ? theme.isDarkMode
                   ? theme.colors.backgroundSecondary
                   : "#F5F5F5"
@@ -850,7 +850,7 @@ const BarberScreen = ({ navigation }) => {
               source={{ uri: item.icon_url }}
               style={[
                 { width: 32, height: 32, borderRadius: 8 },
-                insufficientCoins && { opacity: 0.3, grayscale: 1 },
+                insufficientPoints && { opacity: 0.3, grayscale: 1 },
               ]}
             />
           ) : (
@@ -858,7 +858,7 @@ const BarberScreen = ({ navigation }) => {
               name="redeem"
               size={32}
               color={
-                insufficientCoins ? "#CCC" : item.color || theme.colors.primary
+                insufficientPoints ? "#CCC" : item.color || theme.colors.primary
               }
             />
           )}
@@ -875,7 +875,7 @@ const BarberScreen = ({ navigation }) => {
             <Text
               style={[
                 styles.prizeName,
-                insufficientCoins && { color: "#9E9E9E" },
+                insufficientPoints && { color: "#9E9E9E" },
               ]}
               numberOfLines={2}
             >
@@ -884,8 +884,8 @@ const BarberScreen = ({ navigation }) => {
           </View>
           <View
             style={[
-              styles.prizeCoinsRow,
-              insufficientCoins && {
+              styles.prizePointsRow,
+              insufficientPoints && {
                 backgroundColor: theme.isDarkMode
                   ? theme.colors.muted
                   : "#F0F0F0",
@@ -893,24 +893,24 @@ const BarberScreen = ({ navigation }) => {
               },
             ]}
           >
-            <CoinIcon
+            <PointsIcon
               size={14}
               style={[
                 { marginRight: 4 },
-                insufficientCoins && { opacity: 0.4 },
+                insufficientPoints && { opacity: 0.4 },
               ]}
             />
             <Text
               style={[
-                styles.prizeCoinsText,
+                styles.prizePointsText,
                 {
-                  color: insufficientCoins
+                  color: insufficientPoints
                     ? theme.colors.textMuted
                     : theme.colors.textPrimary,
                 },
               ]}
             >
-              {item.coins_cost || item.coins}
+              {item.points_cost || item.points}
             </Text>
           </View>
         </View>
@@ -977,16 +977,16 @@ const BarberScreen = ({ navigation }) => {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.greeting} numberOfLines={1} ellipsizeMode="tail">
-              Olá, {isAuthenticated ? currentUser.name || "Sans Company" : "Visitante"} 👋
+              Olá, {isAuthenticated ? currentUser.name : "Visitante"} 👋
             </Text>
             <Text style={styles.subGreeting} numberOfLines={1} ellipsizeMode="tail">
-              Pronto para um novo visual?
+              Pronto para agendar?
             </Text>
           </View>
           <View style={styles.headerRight}>
             {isAuthenticated ? (
-              <Card style={styles.coinsCard} padding="sm">
-                <SansCoinsDisplay amount={currentUser.sansCoins} size="md" />
+              <Card style={styles.pointsCard} padding="sm">
+                <PointsDisplay amount={currentUser.points} size="md" />
               </Card>
             ) : (
               <TouchableOpacity
@@ -1051,37 +1051,20 @@ const BarberScreen = ({ navigation }) => {
         {/* Bloco de Prêmios */}
         <View>
           <SectionHeader
-            title="Clube de Recompensas"
-            subtitle="Troque seus Sans Coins"
+            title="Prêmios"
+            subtitle="Troque seus pontos"
             style={styles.sectionHeader}
           />
           <View style={styles.prizesContainer}>
             <FlatList
-              data={
-                prizes.length > 0
-                  ? prizes
-                  : [
-                      {
-                        id: "dl1",
-                        name: "Sobrancelha",
-                        coins: 150,
-                        color: "#8b5cf6",
-                      },
-                      {
-                        id: "dl2",
-                        name: "Barba VIP",
-                        coins: 400,
-                        color: "#f59e0b",
-                      },
-                    ]
-              }
+              data={prizes}
               renderItem={renderPrize}
               keyExtractor={(item) => item.id}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.prizesList}
             />
-            {(!isAuthenticated || !currentUser.clubeSans) && (
+            {(!isAuthenticated || !currentUser.clubMember) && (
               <View style={styles.clubeOverlay}>
                 <BlurView
                   intensity={10}
@@ -1096,32 +1079,19 @@ const BarberScreen = ({ navigation }) => {
                       color={theme.colors.primary}
                     />
                   </View>
-                  <Text style={styles.clubeOverlayTitle}>Clube Sans</Text>
+                  <Text style={styles.clubeOverlayTitle}>Clube</Text>
                   <Text style={styles.clubeOverlayText}>
                     Resgate prêmios exclusivos sendo membro.
                   </Text>
-                  <TouchableOpacity
-                    style={styles.clubeCTAButton}
-                    onPress={() => {
-                      if (!isAuthenticated) {
-                        navigation.navigate("Login");
-                        return;
-                      }
-                      const message = encodeURIComponent(
-                        "Olá! Gostaria de saber mais sobre como fazer parte do Clube Sans e ter acesso aos prêmios exclusivos!",
-                      );
-                      Linking.openURL(
-                        `whatsapp://send?phone=5541997355454&text=${message}`,
-                      );
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.clubeCTAButtonText}>
-                      {isAuthenticated
-                        ? "QUERO SER CLUBE SANS"
-                        : "ENTRAR PARA PARTICIPAR"}
-                    </Text>
-                  </TouchableOpacity>
+                  {!isAuthenticated && (
+                    <TouchableOpacity
+                      style={styles.clubeCTAButton}
+                      onPress={() => navigation.navigate("Login")}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.clubeCTAButtonText}>Entrar para participar</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             )}
@@ -1159,16 +1129,16 @@ const BarberScreen = ({ navigation }) => {
               </View>
               <View style={styles.appointmentContent}>
                 <Avatar
-                  source={nextAppointment.barber.avatar}
+                  source={nextAppointment.professional.avatar}
                   size="md"
-                  name={nextAppointment.barber.name}
+                  name={nextAppointment.professional.name}
                 />
                 <View style={styles.appointmentInfo}>
                   <Text style={styles.appointmentService}>
                     {nextAppointment.service.name}
                   </Text>
-                  <Text style={styles.appointmentBarber}>
-                    com {nextAppointment.barber.name}
+                  <Text style={styles.appointmentProfessional}>
+                    com {nextAppointment.professional.name}
                   </Text>
                 </View>
               </View>
@@ -1237,23 +1207,23 @@ const BarberScreen = ({ navigation }) => {
               </View>
             )}
 
-            {/* Escolha seu Barbeiro */}
+            {/* Escolha do profissional */}
             <SectionHeader
-              title={isRescheduling ? "Trocar Barbeiro" : "Agende seu horário"}
+              title={isRescheduling ? "Trocar profissional" : "Agende seu horário"}
               subtitle="Profissionais disponíveis"
               style={styles.sectionHeader}
             />
             <FlatList
-              data={barbers}
-              renderItem={renderBarber}
+              data={professionals}
+              renderItem={renderProfessional}
               keyExtractor={(item) => item.id}
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.barbersList}
+              contentContainerStyle={styles.professionalsList}
             />
 
             {/* Serviços */}
-            {selectedBarber && (
+            {selectedProfessional && (
               <>
                 <SectionHeader
                   title="Serviços"
@@ -1261,7 +1231,7 @@ const BarberScreen = ({ navigation }) => {
                   style={styles.sectionHeader}
                 />
                 <FlatList
-                  data={barberServices}
+                  data={professionalServices}
                   renderItem={renderService}
                   keyExtractor={(item) => item.id}
                   horizontal
@@ -1272,7 +1242,7 @@ const BarberScreen = ({ navigation }) => {
             )}
 
             {/* Calendário */}
-            {selectedBarber && selectedService && (
+            {selectedProfessional && selectedService && (
               <View>
                 <SectionHeader
                   title="Data"
@@ -1291,7 +1261,7 @@ const BarberScreen = ({ navigation }) => {
             )}
 
             {/* Horários */}
-            {selectedBarber && selectedService && selectedDate && (
+            {selectedProfessional && selectedService && selectedDate && (
               <>
                 <SectionHeader
                   title="Horário"
@@ -1351,7 +1321,7 @@ const BarberScreen = ({ navigation }) => {
       </ScrollView>
 
       {/* Botão Confirmar Fixo */}
-      {selectedBarber && selectedService && selectedDate && selectedTime && (
+      {selectedProfessional && selectedService && selectedDate && selectedTime && (
         <View
           style={[
             styles.confirmButtonContainer,
@@ -1429,8 +1399,8 @@ const getStyles = (theme) => {
       flexDirection: "row",
       alignItems: "center",
     },
-    coinsCard: {
-      backgroundColor: theme.colors.coinsBackground,
+    pointsCard: {
+      backgroundColor: theme.colors.pointsBackground,
     },
     headerLoginBtn: {
       flexDirection: "row",
@@ -1483,7 +1453,7 @@ const getStyles = (theme) => {
       color: theme.colors.textPrimary,
       textAlign: "center",
     },
-    prizeCoinsRow: {
+    prizePointsRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
@@ -1492,10 +1462,10 @@ const getStyles = (theme) => {
       paddingVertical: 4,
       borderRadius: 8,
     },
-    prizeCoinsText: {
+    prizePointsText: {
       fontSize: 13,
       fontWeight: "800",
-      color: theme.colors.coins,
+      color: theme.colors.points,
       marginLeft: 4,
     },
     // Reschedule Banner
@@ -1597,7 +1567,7 @@ const getStyles = (theme) => {
       fontWeight: "600",
       color: theme.colors.textPrimary,
     },
-    appointmentBarber: {
+    appointmentProfessional: {
       fontSize: 14,
       color: theme.colors.textSecondary,
       marginTop: 2,
@@ -1684,13 +1654,13 @@ const getStyles = (theme) => {
       marginTop: 16,
       marginBottom: 4,
     },
-    // Barbers
-    barbersList: {
+    // Professionals
+    professionalsList: {
       paddingHorizontal: 24,
       paddingBottom: 20,
       paddingTop: 20,
     },
-    barberCard: {
+    professionalCard: {
       alignItems: "center",
       justifyContent: "center",
       paddingVertical: 20,
@@ -1704,11 +1674,11 @@ const getStyles = (theme) => {
       borderWidth: 1.5,
       borderColor: theme.isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
     },
-    barberCardSelected: {
+    professionalCardSelected: {
       borderColor: theme.colors.primary,
       backgroundColor: theme.colors.primaryLight + "10",
     },
-    barberName: {
+    professionalName: {
       fontSize: 13,
       fontWeight: "800",
       color: theme.colors.textPrimary,
@@ -1716,13 +1686,13 @@ const getStyles = (theme) => {
       textAlign: "center",
       letterSpacing: 0.3,
     },
-    barberSpecialty: {
+    professionalSpecialty: {
       fontSize: 11,
       color: theme.colors.textMuted,
       marginTop: 2,
       textAlign: "center",
     },
-    barberRating: {
+    professionalRating: {
       flexDirection: "row",
       alignItems: "center",
       marginTop: 6,
@@ -1755,7 +1725,7 @@ const getStyles = (theme) => {
       right: -10,
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: "#FFD700",
+      backgroundColor: "#F2A93B",
       paddingHorizontal: 10,
       paddingVertical: 6,
       borderRadius: 12,
@@ -1982,7 +1952,7 @@ const getStyles = (theme) => {
       paddingHorizontal: 24,
       borderRadius: 12,
       backgroundColor: theme.isDarkMode
-        ? "rgba(124,77,255,0.15)"
+        ? "rgba(11, 110, 102,0.15)"
         : "rgba(255,255,255,0.7)",
     },
     clubeCTAButtonText: {
@@ -1994,4 +1964,4 @@ const getStyles = (theme) => {
   });
 };
 
-export default BarberScreen;
+export default AgendarScreen;
