@@ -8,6 +8,7 @@ import {
   SafeAreaView,
 } from "react-native-safe-area-context";
 import { useTheme } from "../utils/ThemeContext";
+import { useBusiness } from "../business/BusinessProvider";
 import { ROUTES } from "../navigation/routes";
 import Icon from "../components/ui/Icon";
 import { fonts, radius } from "../theme/tokens";
@@ -57,6 +58,9 @@ const MainTabs = () => {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const styles = getStyles(theme);
+  const { business } = useBusiness();
+  // Sem o módulo da loja ligado na conta, a aba some (sem erro).
+  const storeOn = Boolean(business && business.modules && business.modules.store);
 
   const bottomInset = insets.bottom || 0;
   const paddingBottom = Platform.OS === "web" ? 25 : (bottomInset > 0 ? bottomInset + 4 : 10);
@@ -87,11 +91,13 @@ const MainTabs = () => {
         component={AgendarScreen}
         options={{ tabBarLabel: "Agendar" }}
       />
-      <Tab.Screen
-        name={ROUTES.Loja}
-        component={ProductsStack}
-        options={{ tabBarLabel: "Loja" }}
-      />
+      {storeOn && (
+        <Tab.Screen
+          name={ROUTES.Loja}
+          component={ProductsStack}
+          options={{ tabBarLabel: "Loja" }}
+        />
+      )}
       <Tab.Screen
         name={ROUTES.Perfil}
         component={PerfilScreen}

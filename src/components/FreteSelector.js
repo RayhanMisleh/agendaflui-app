@@ -1,373 +1,115 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-} from "react-native";
-import MaterialIcons from "react-native-vector-icons/MaterialIcons";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import Button from "./ui/Button";
+import Skeleton from "./ui/Skeleton";
+import FormMessage from "./entry/FormMessage";
 import { useTheme } from "../utils/ThemeContext";
-import {
-  calcularFrete,
-  formatFretePrice,
-  formatDeliveryTime,
-} from "../api/freteApi";
-import Toast from "react-native-toast-message";
+import { quoteShipping } from "../api/store";
+import { toOrderLines, formatCents, shippingDaysLabel } from "../store/order";
+import { fonts, radius, type } from "../theme/tokens";
 
-export default function FreteSelector({
-  endereco,
-  cartItems,
-  onFreteSelect,
-  selectedFrete,
-}) {
-  const { theme, themeMode } = useTheme();
-  const isDark = theme?.isDarkMode ?? (themeMode === "dark");
-  const styles = getStyles(theme, isDark);
+// Frete do carrinho para o endereço escolhido. A cotação é do servidor, assinada, e vale 30 minutos: ao mudar o
+// endereço, o carrinho ou `refreshKey`, cota de novo. Avisa `onChange` com a opção marcada (ou null).
+export default function FreteSelector({ addressId, items, refreshKey = 0, pickupEnabled = false, onChange }) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const [state, setState] = useState({ status: "idle", options: [], shippingError: null, message: null });
+  const [selected, setSelected] = useState(null);
+  const turn = useRef(0);
+  const notify = useRef(onChange);
+  notify.current = onChange;
+  const addressRef = useRef(addressId);
+  addressRef.current = addressId;
 
-  const [opcoesFrete, setOpcoesFrete] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [expandido, setExpandido] = useState(false);
+  const linesKey = JSON.stringify(
+    toOrderLines(items)
+      .map((line) => [line.productId, line.quantity])
+      .sort()
+  );
+
+  const choose = useCallback((option) => {
+    setSelected(option ? option.serviceCode : null);
+    // A cotação vale para o endereço em que foi pedida: a opção sai marcada com ele.
+    notify.current(option ? { ...option, addressId: addressRef.current } : null);
+  }, []);
+
+  const quote = useCallback(async () => {
+    const mine = ++turn.current;
+    choose(null);
+    if (!addressId || items.length === 0) {
+      setState({ status: "idle", options: [], shippingError: null, message: null });
+      return;
+    }
+    setState({ status: "loading", options: [], shippingError: null, message: null });
+    try {
+      const result = await quoteShipping({ addressId, lines: toOrderLines(items) });
+      if (mine !== turn.current) return;
+      const options = [...(result.options || [])].sort((a, b) => a.priceCents - b.priceCents);
+      setState({ status: "ready", options, shippingError: result.shippingError || null, message: null });
+      if (options.length > 0) choose(options[0]);
+    } catch (error) {
+      if (mine !== turn.current) return;
+      setState({ status: "failed", options: [], shippingError: null, message: error.message });
+    }
+    // `items` entra pela chave das linhas
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressId, linesKey, refreshKey, choose]);
 
   useEffect(() => {
-    if (endereco && endereco.cep && cartItems.length > 0) {
-      calcularOpcoesFrete();
-    } else {
-      resetarFrete();
-    }
-  }, [endereco, cartItems]);
+    quote();
+  }, [quote]);
 
-  const calcularOpcoesFrete = async () => {
-    if (!endereco || !endereco.cep) return;
-
-    if (cartItems.length === 0) return;
-
-    try {
-      setLoading(true);
-      setOpcoesFrete([]);
-
-      // Calcular valor total dos produtos
-      const invoiceValue = cartItems.reduce((total, item) => {
-        return total + item.product_price * item.quantity;
-      }, 0);
-
-      // Preparar dados dos produtos para a API
-      const products = cartItems.map((item) => ({
-        product_id: item.product_id,
-        product_quantity: item.quantity,
-        product_price: item.product_price,
-      }));
-
-      // Limpar CEP (remover caracteres especiais)
-      const cepLimpo = endereco.cep.replace(/\D/g, "");
-
-      const response = await calcularFrete(
-        cepLimpo,
-        invoiceValue,
-        products
-      );
-
-      if (response.success && response.quote && response.quote.services) {
-        const servicos = response.quote.services.filter(
-          (service) => !service.Error
-        );
-
-        if (servicos.length > 0) {
-          setOpcoesFrete(servicos);
-
-          // Selecionar automaticamente a opção mais barata
-          const maisBarato = servicos.reduce((prev, curr) =>
-            prev.ShippingPrice < curr.ShippingPrice ? prev : curr
-          );
-
-          if (onFreteSelect) {
-            onFreteSelect({
-              serviceCode: maisBarato.ServiceCode,
-              serviceDescription: maisBarato.ServiceDescription,
-              carrier: maisBarato.Carrier,
-              preco: parseFloat(maisBarato.ShippingPrice),
-              deliveryTime: maisBarato.DeliveryTime,
-            });
-          }
-
-          Toast.show({
-            type: "success",
-            text1: "Frete Calculado",
-            text2: `${servicos.length} opções disponíveis`,
-            visibilityTime: 2000,
-          });
-        } else {
-          Toast.show({
-            type: "error",
-            text1: "Erro no Frete",
-            text2: "Nenhuma opção disponível para este CEP",
-            visibilityTime: 3000,
-          });
-        }
-      }
-    } catch (error) {
-      console.error("Erro ao calcular frete:", error);
-
-      Toast.show({
-        type: "error",
-        text1: "Erro no Frete",
-        text2: "Não foi possível calcular o frete",
-        visibilityTime: 3000,
-      });
-
-      Alert.alert(
-        "Erro no Cálculo de Frete",
-        "Não foi possível calcular o frete. Verifique o endereço selecionado.",
-        [{ text: "OK" }]
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const selecionarFrete = (servico) => {
-    const freteData = {
-      serviceCode: servico.ServiceCode,
-      serviceDescription: servico.ServiceDescription,
-      carrier: servico.Carrier,
-      preco: parseFloat(servico.ShippingPrice),
-      deliveryTime: servico.DeliveryTime,
-    };
-
-    if (onFreteSelect) {
-      onFreteSelect(freteData);
-    }
-  };
-
-  const resetarFrete = () => {
-    setOpcoesFrete([]);
-    setExpandido(false);
-    if (onFreteSelect) {
-      onFreteSelect(null);
-    }
-  };
-
-  const toggleExpandir = () => {
-    if (opcoesFrete.length > 0) {
-      setExpandido(!expandido);
-    }
-  };
-
-  // Se não há endereço ou não há itens no carrinho
-  if (!endereco || cartItems.length === 0) {
+  if (!addressId) return <Text style={[styles.note, { color: c.inkMuted }]}>Escolha um endereço para ver o frete.</Text>;
+  if (state.status === "loading") return <Skeleton width="100%" height={72} style={{ borderRadius: radius.lg }} />;
+  if (state.status === "failed") {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <MaterialIcons name="local-shipping" size={20} color="#ccc" />
-          <Text style={styles.headerTextDisabled}>
-            {!endereco
-              ? "Selecione um endereço para calcular o frete"
-              : "Adicione produtos para calcular o frete"}
-          </Text>
-        </View>
+      <View>
+        <FormMessage kind="error">{state.message}</FormMessage>
+        <Button title="Tentar de novo" variant="secondary" size="sm" onPress={quote} style={{ alignSelf: "flex-start" }} />
       </View>
+    );
+  }
+  if (state.status === "ready" && state.options.length === 0) {
+    return (
+      <FormMessage kind="info">
+        {`${state.shippingError || "Não há entrega para este endereço."}${pickupEnabled ? " Você pode retirar na loja." : ""}`}
+      </FormMessage>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.header}
-        onPress={toggleExpandir}
-        disabled={loading || opcoesFrete.length === 0}
-      >
-        <MaterialIcons
-          name="local-shipping"
-          size={20}
-          color={theme.colors.primary}
-        />
-        <View style={styles.headerContent}>
-          {loading ? (
-            <Text style={styles.headerText}>Calculando frete...</Text>
-          ) : selectedFrete ? (
-            <>
-              <Text style={styles.headerText}>
-                Frete: {selectedFrete.serviceDescription}
-              </Text>
-              <Text style={styles.freteInfo}>
-                {formatFretePrice(selectedFrete.preco)} -{" "}
-                {formatDeliveryTime(selectedFrete.deliveryTime)}
-              </Text>
-            </>
-          ) : (
-            <Text style={styles.headerText}>CEP: {endereco.cep}</Text>
-          )}
-        </View>
-
-        <View style={styles.headerActions}>
-          {loading && (
-            <ActivityIndicator size="small" color={theme.colors.primary} />
-          )}
-          {opcoesFrete.length > 1 && !loading && (
-            <MaterialIcons
-              name={expandido ? "expand-less" : "expand-more"}
-              size={24}
-              color={theme.colors.primary}
-            />
-          )}
-        </View>
-      </TouchableOpacity>
-
-      {/* Opções de frete expandidas */}
-      {expandido && opcoesFrete.length > 0 && (
-        <View style={styles.opcoesContainer}>
-          {opcoesFrete.map((servico, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[
-                styles.opcaoFrete,
-                selectedFrete?.serviceCode === servico.ServiceCode &&
-                  styles.opcaoFreteSelecionada,
-              ]}
-              onPress={() => selecionarFrete(servico)}
-            >
-              <View style={styles.opcaoInfo}>
-                <View style={styles.opcaoHeader}>
-                  <Text style={styles.opcaoNome}>
-                    {servico.ServiceDescription}
-                  </Text>
-                  <Text style={styles.opcaoValor}>
-                    {formatFretePrice(servico.ShippingPrice)}
-                  </Text>
-                </View>
-                <Text style={styles.opcaoCarrier}>{servico.Carrier}</Text>
-                <Text style={styles.opcaoPrazo}>
-                  Entrega em {formatDeliveryTime(servico.DeliveryTime)}
-                </Text>
-              </View>
-
-              {selectedFrete?.serviceCode === servico.ServiceCode && (
-                <MaterialIcons
-                  name="check-circle"
-                  size={20}
-                  color={theme.colors.primary}
-                />
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      {/* Informação do endereço */}
-      <View style={styles.enderecoDados}>
-        <MaterialIcons
-          name="place"
-          size={16}
-          color={isDark ? "#8A8A90" : "#6B7280"}
-        />
-        <Text style={styles.enderecoTexto} numberOfLines={2}>
-          {endereco.rua}, {endereco.numero} - {endereco.bairro},{" "}
-          {endereco.cidade}/{endereco.estado}
-        </Text>
-      </View>
+    <View>
+      {state.options.map((option) => {
+        const on = option.serviceCode === selected;
+        return (
+          <TouchableOpacity
+            key={option.serviceCode}
+            activeOpacity={0.8}
+            onPress={() => choose(option)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
+            style={[styles.card, { backgroundColor: on ? c.brandTint : c.surface, borderColor: on ? c.brand : c.line }]}
+          >
+            <View style={[styles.radio, { borderColor: on ? c.brand : c.inkMuted }]}>{on ? <View style={[styles.dot, { backgroundColor: c.brand }]} /> : null}</View>
+            <View style={styles.body}>
+              <Text style={[styles.name, { color: c.ink }]}>{option.name}</Text>
+              <Text style={[styles.days, { color: c.inkMuted }]}>{shippingDaysLabel(option.days)}</Text>
+            </View>
+            <Text style={[styles.price, { color: c.ink }]}>{formatCents(option.priceCents)}</Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
 
-const getStyles = (theme, isDark) => StyleSheet.create({
-  container: {
-    backgroundColor: isDark ? "#1A1A1E" : "white",
-    borderRadius: 14,
-    marginHorizontal: 12,
-    marginVertical: 6,
-    overflow: "hidden",
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: isDark ? "#282830" : "rgba(0,0,0,0.06)",
-    shadowColor: isDark ? "#000" : "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: isDark ? 0.3 : 0.06,
-    shadowRadius: 6,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: isDark ? "#282830" : "#f0f0f0",
-  },
-  headerContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  headerText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: isDark ? "#FFFFFF" : theme.colors.foreground,
-  },
-  headerTextDisabled: {
-    fontSize: 16,
-    color: isDark ? "#777" : "#6B7280",
-    marginLeft: 12,
-  },
-  freteInfo: {
-    fontSize: 14,
-    color: isDark ? "#A0A0B0" : "#4B5563",
-    marginTop: 2,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  opcoesContainer: {
-    paddingBottom: 4,
-  },
-  opcaoFrete: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: isDark ? "#24242A" : "#f5f5f5",
-  },
-  opcaoFreteSelecionada: {
-    backgroundColor: isDark ? "rgba(11, 110, 102, 0.12)" : "#f8f9ff",
-    borderLeftWidth: 3,
-    borderLeftColor: theme.colors.primary,
-  },
-  opcaoInfo: {
-    flex: 1,
-  },
-  opcaoHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  opcaoNome: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: isDark ? "#F2F2F5" : theme.colors.foreground,
-  },
-  opcaoValor: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: theme.colors.primary,
-  },
-  opcaoCarrier: {
-    fontSize: 12,
-    color: isDark ? "#8A8A90" : "#6B7280",
-    marginBottom: 2,
-  },
-  opcaoPrazo: {
-    fontSize: 12,
-    color: isDark ? "#8A8A90" : "#6B7280",
-  },
-  enderecoDados: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    backgroundColor: isDark ? "#121214" : "#f8f9fa",
-  },
-  enderecoTexto: {
-    fontSize: 12,
-    color: isDark ? "#8A8A90" : "#6B7280",
-    marginLeft: 8,
-    flex: 1,
-  },
+const styles = StyleSheet.create({
+  note: { ...type.small },
+  card: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: radius.lg, padding: 14, marginBottom: 10 },
+  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  body: { flex: 1, marginLeft: 12 },
+  name: { fontFamily: fonts.textBold, fontSize: 15, lineHeight: 20 },
+  days: { ...type.small, marginTop: 2 },
+  price: { ...type.time, fontSize: 16 },
 });

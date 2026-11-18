@@ -1,528 +1,152 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  Alert,
-  RefreshControl,
-  ActivityIndicator,
-} from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import MaterialIcons from "react-native-vector-icons/MaterialIcons";
-import { getUserPedidos } from "../api/pedidosApi";
-import { formatarStatusPagamento, formatarStatusPedido } from "../api/pedidoDetalhesApi";
-import { createTextStyle, createButtonStyle } from "../utils/theme";
-import { useTheme } from "../utils/ThemeContext";
+import Button from "../components/ui/Button";
+import Icon from "../components/ui/Icon";
 import Skeleton from "../components/ui/Skeleton";
+import OrderStatusBadge from "../components/ui/OrderStatusBadge";
+import { useBusiness } from "../business/BusinessProvider";
+import { useTheme } from "../utils/ThemeContext";
+import { listOrders } from "../api/store";
+import { formatCents } from "../store/order";
+import { fonts, radius, type } from "../theme/tokens";
 
 const MeusPedidosScreen = ({ navigation }) => {
   const { theme } = useTheme();
-  const { isDarkMode } = theme;
-  const styles = getStyles(theme, isDarkMode);
-
-  const [pedidos, setPedidos] = useState([]);
+  const c = theme.colors;
+  const { slug } = useBusiness();
+  const [orders, setOrders] = useState([]);
+  const [cursor, setCursor] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [failed, setFailed] = useState(null);
+  const turn = useRef(0);
 
-  useEffect(() => {
-    carregarPedidos();
-
-    // Listener para quando a tela ganha foco
-    const unsubscribe = navigation.addListener("focus", () => {
-      carregarPedidos();
-    });
-
-    return unsubscribe;
-  }, [navigation]);
-
-  const carregarPedidos = async () => {
+  const load = useCallback(async ({ pull = false } = {}) => {
+    const mine = ++turn.current;
+    if (pull) setRefreshing(true);
+    else setLoading(true);
+    setFailed(null);
     try {
-      setLoading(true);
-      const response = await getUserPedidos();
-
-      if (response.success) {
-        setPedidos(response.data);
-      } else {
-        Alert.alert("Erro", "Erro ao carregar pedidos");
-      }
+      const page = await listOrders({});
+      if (mine !== turn.current) return;
+      setOrders(page.items);
+      setCursor(page.nextCursor);
     } catch (error) {
-      console.error("Erro ao carregar pedidos:", error);
-      Alert.alert("Erro", "Erro ao carregar seus pedidos");
+      if (mine !== turn.current) return;
+      setFailed(error.message);
+      setOrders([]);
+      setCursor(null);
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const navegarParaDetalhes = (pedidoId) => {
-    navigation.navigate("PedidoDetalhes", { pedidoId });
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await carregarPedidos();
-    setRefreshing(false);
-  };
-
-  const formatarData = (dataString) => {
-    const data = new Date(dataString);
-    return data.toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const getProductItemPrice = (product) => {
-    if (!product) return 0;
-    const promo = Number(product.promotional_price);
-    const normal = Number(product.product_price) || 0;
-    if (promo && promo > 0 && promo < normal) {
-      return promo;
-    }
-    return normal;
-  };
-
-  const calcularTotalPedido = (pedido) => {
-    if (!pedido) return 0;
-    const pedidoProducts = pedido.pedido_product || [];
-
-    const totalProducts = pedidoProducts.reduce((total, pItem) => {
-      const price = getProductItemPrice(pItem.product);
-      const qty = Number(pItem.pedido_product_quantity) || 1;
-      return total + price * qty;
-    }, 0);
-
-    const taxaEntrega = Number(pedido.taxa_entrega) || 0;
-
-    return totalProducts + taxaEntrega;
-  };
-
-  const obterBadgeStatusCard = (item) => {
-    // 1. Cancelado
-    if (item.status === "CANCELADO" || item.statusPagamento === "CANCELLED") {
-      return { text: "Cancelado", color: "#ef4444", icon: "cancel" };
-    }
-
-    // 2. Concluído
-    if (item.status === "CONCLUIDO" || item.status === "CONCLUÍDO") {
-      return { text: "Concluído", color: "#10b981", icon: "check-circle" };
-    }
-
-    // 3. Status de Entrega (se for delivery e estiver enviado ou entregue)
-    if (item.statusEntrega === "ENTREGUE") {
-      return { text: "Entregue", color: "#10b981", icon: "done-all" };
-    }
-    if (item.statusEntrega === "ENVIADO") {
-      return { text: "Enviado", color: "#3b82f6", icon: "local-shipping" };
-    }
-
-    // 4. Pagamento Pendente
-    if (item.statusPagamento === "PENDING" || item.statusPagamento === "PENDENTE") {
-      return { text: "Pagamento Pendente", color: "#f59e0b", icon: "schedule" };
-    }
-
-    // 5. Se já foi pago
-    if (
-      item.statusPagamento === "APPROVED" ||
-      item.statusPagamento === "PAID" ||
-      item.statusPagamento === "APROVADO"
-    ) {
-      if (!item.endereco || (item.observacoes && item.observacoes.toLowerCase().includes("retirar"))) {
-        return { text: "Pronto p/ Retirar", color: "#10b981", icon: "storefront" };
+      if (mine === turn.current) {
+        setLoading(false);
+        setRefreshing(false);
       }
-      return { text: "Confirmado", color: "#3b82f6", icon: "check-circle" };
     }
+  }, []);
 
-    return formatarStatusPedido(item.status);
+  // A lista volta a ser buscada ao entrar na tela (o pagamento pode ter acontecido enquanto isso).
+  useEffect(() => {
+    load();
+    const unsubscribe = navigation.addListener("focus", () => load({ pull: true }));
+    return unsubscribe;
+  }, [slug, load, navigation]);
+
+  const loadMore = async () => {
+    if (!cursor || loadingMore) return;
+    const mine = turn.current;
+    setLoadingMore(true);
+    try {
+      const page = await listOrders({ cursor });
+      if (mine !== turn.current) return;
+      setOrders((current) => [...current, ...page.items]);
+      setCursor(page.nextCursor);
+    } catch (error) {
+      setFailed(error.message);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
-  const renderPedidoCard = ({ item }) => {
-    const total = calcularTotalPedido(item);
-    const badgeStatus = obterBadgeStatusCard(item);
-    const isPago = Boolean(
-      item.statusPagamento === "APPROVED" ||
-      item.statusPagamento === "PAID" ||
-      item.statusPagamento === "APROVADO"
-    );
-    const isCancelado = item.status === "CANCELADO" || item.statusPagamento === "CANCELLED";
-    const podeCancelar = item.status === "PENDENTE" && item.statusEntrega !== "ENVIADO" && item.statusEntrega !== "ENTREGUE";
-
+  const renderItem = ({ item }) => {
+    const count = item.items.reduce((sum, line) => sum + line.quantity, 0);
     return (
       <TouchableOpacity
-        style={styles.pedidoCard}
-        onPress={() => navegarParaDetalhes(item.pedido_id)}
-        activeOpacity={0.7}
+        activeOpacity={0.8}
+        onPress={() => navigation.navigate("PedidoDetalhes", { orderId: item.id })}
+        accessibilityRole="button"
+        accessibilityLabel={`Pedido ${item.number}`}
+        style={[styles.card, { backgroundColor: c.surface, borderColor: c.line }]}
       >
-        {/* Header do Card */}
-        <View style={styles.cardHeader}>
-          <View style={styles.pedidoInfo}>
-            <Text style={styles.pedidoId}>Pedido #{item.pedido_id}</Text>
-            <Text style={styles.pedidoData}>
-              {formatarData(item.created_at)}
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: badgeStatus.color },
-            ]}
-          >
-            <MaterialIcons
-              name={badgeStatus.icon}
-              size={16}
-              color="white"
-            />
-            <Text style={styles.statusText}>{badgeStatus.text}</Text>
-          </View>
+        <View style={styles.top}>
+          <Text style={[styles.number, { color: c.ink }]}>Pedido {item.number}</Text>
+          <Text style={[styles.total, { color: c.ink }]}>{formatCents(item.totalCents)}</Text>
         </View>
-
-        {/* Endereço de Entrega ou Retirada */}
-        <View style={styles.enderecoSection}>
-          <MaterialIcons
-            name={item.endereco ? "location-on" : "storefront"}
-            size={16}
-            color={
-              item.endereco
-                ? theme.colors.textMuted
-                : isCancelado
-                ? "#ef4444"
-                : isPago
-                ? theme.colors.primary
-                : "#f59e0b"
-            }
-          />
-          <Text
-            style={[
-              styles.enderecoText,
-              !item.endereco && {
-                color: isCancelado
-                  ? "#ef4444"
-                  : isPago
-                  ? theme.colors.primary
-                  : "#d97706",
-                fontWeight: "600",
-              },
-            ]}
-          >
-            {item.endereco
-              ? `${item.endereco.rua}, ${item.endereco.numero} - ${item.endereco.bairro}${item.endereco.complemento ? `, ${item.endereco.complemento}` : ""}`
-              : isCancelado
-              ? "Retirada na loja (cancelada)"
-              : isPago
-              ? "Seu produto está pronto para retirar na loja!"
-              : "Retirar na loja (aguardando pagamento)"}
-          </Text>
-        </View>
-
-        {/* Lista de Produtos */}
-        <View style={styles.produtosSection}>
-          <Text style={styles.sectionTitle}>Itens:</Text>
-          {item.pedido_product.map((produtoItem, index) => {
-            const price = getProductItemPrice(produtoItem.product);
-            const qty = Number(produtoItem.pedido_product_quantity) || 1;
-            return (
-              <View key={index} style={styles.produtoItem}>
-                <Text style={styles.produtoNome}>
-                  {qty}x {produtoItem.product?.product_name}
-                </Text>
-                <Text style={styles.produtoPreco}>
-                  R$ {(price * qty).toFixed(2)}
-                </Text>
-              </View>
-            );
-          })}
-          {Number(item.taxa_entrega) > 0 && (
-            <View style={styles.produtoItem}>
-              <Text style={[styles.produtoNome, { color: theme.colors.textMuted }]}>
-                Taxa de Entrega
-              </Text>
-              <Text style={styles.produtoPreco}>
-                R$ {Number(item.taxa_entrega).toFixed(2)}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Observações (se houver) */}
-        {item.observacoes && (
-          <View style={styles.observacoesSection}>
-            <Text style={styles.sectionTitle}>Observações:</Text>
-            <Text style={styles.observacoesText}>{item.observacoes}</Text>
-          </View>
-        )}
-
-        {/* Footer com Total */}
-        <View style={styles.cardFooter}>
-          <View style={styles.totalSection}>
-            <Text style={styles.totalLabel}>Total:</Text>
-            <Text style={styles.totalValue}>R$ {total.toFixed(2)}</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.detalhesButton}
-            onPress={() => navegarParaDetalhes(item.pedido_id)}
-          >
-            <Text style={styles.detalhesButtonText}>Ver Detalhes</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={[styles.small, { color: c.inkMuted }]}>{item.createdLabel} · {count} {count === 1 ? "item" : "itens"}</Text>
+        <OrderStatusBadge order={item} style={{ marginTop: 10 }} />
+        {item.status === "AWAITING_PAYMENT" ? <Text style={[styles.small, { color: c.inkMuted, marginTop: 8 }]}>Pague até {item.expiresLabel}.</Text> : null}
       </TouchableOpacity>
     );
   };
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <MaterialIcons name="receipt-long" size={64} color={theme.colors.textMuted} />
-      <Text style={styles.emptyTitle}>Nenhum pedido encontrado</Text>
-      <Text style={styles.emptySubtitle}>
-        Seus pedidos aparecerão aqui após realizar uma compra
-      </Text>
-    </View>
-  );
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <MaterialIcons
-              name="arrow-back"
-              size={24}
-              color={theme.colors.foreground}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Meus Pedidos</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-        <View style={styles.listContainer}>
-          {[1, 2, 3].map((key) => (
-            <View key={key} style={styles.pedidoCard}>
-              <View style={styles.cardHeader}>
-                <View style={styles.pedidoInfo}>
-                  <Skeleton width={100} height={18} style={{ marginBottom: 4 }} />
-                  <Skeleton width={140} height={14} />
-                </View>
-                <Skeleton width={80} height={24} style={{ borderRadius: 12 }} />
-              </View>
-              <View style={styles.enderecoSection}>
-                <Skeleton width={20} height={20} style={{ marginRight: 8, borderRadius: 10 }} />
-                <Skeleton width="80%" height={14} />
-              </View>
-              <View style={styles.cardFooter}>
-                <View style={styles.totalSection}>
-                  <Skeleton width={60} height={14} style={{ marginBottom: 4 }} />
-                  <Skeleton width={80} height={20} />
-                </View>
-                <Skeleton width={80} height={16} />
-              </View>
-            </View>
-          ))}
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
+    <SafeAreaView style={[styles.container, { backgroundColor: c.ground }]} edges={["top"]}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <MaterialIcons
-            name="arrow-back"
-            size={24}
-            color={theme.colors.foreground}
-          />
+        <TouchableOpacity style={styles.back} onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.getParent()?.goBack())} accessibilityRole="button" accessibilityLabel="Voltar">
+          <Icon name="arrow-left" size={24} color={c.ink} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Meus Pedidos</Text>
-        <View style={styles.headerSpacer} />
+        <Text style={[styles.headerTitle, { color: c.ink }]}>Meus pedidos</Text>
+        <View style={styles.back} />
       </View>
 
-      {/* Lista de Pedidos */}
-      <FlatList
-        data={pedidos}
-        keyExtractor={(item, index) => item.pedido_id ? item.pedido_id.toString() : index.toString()}
-        renderItem={renderPedidoCard}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[theme.colors.primary]}
-          />
-        }
-        ListEmptyComponent={renderEmptyState}
-      />
+      {loading ? (
+        <View style={styles.list}>
+          {[1, 2, 3].map((key) => (
+            <Skeleton key={key} width="100%" height={110} style={{ borderRadius: radius.lg, marginBottom: 12 }} />
+          ))}
+        </View>
+      ) : failed && orders.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={[styles.emptyTitle, { color: c.ink }]}>Não deu para carregar</Text>
+          <Text style={[styles.emptyText, { color: c.inkMuted }]}>{failed}</Text>
+          <Button title="Tentar de novo" onPress={() => load()} style={{ marginTop: 16 }} />
+        </View>
+      ) : (
+        <FlatList
+          data={orders}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load({ pull: true })} tintColor={c.brand} colors={[c.brand]} />}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={[styles.emptyTitle, { color: c.ink }]}>Nenhum pedido ainda</Text>
+              <Text style={[styles.emptyText, { color: c.inkMuted }]}>Seus pedidos da loja aparecem aqui.</Text>
+            </View>
+          }
+          ListFooterComponent={cursor ? <Button title="Carregar mais" variant="secondary" onPress={loadMore} loading={loadingMore} style={{ marginTop: 4 }} /> : null}
+        />
+      )}
     </SafeAreaView>
   );
 };
 
-const getStyles = (theme, isDarkMode) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.backgroundSecondary,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    backgroundColor: theme.colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderLight,
-  },
-  backButton: {
-    padding: theme.spacing.sm,
-  },
-  headerTitle: {
-    ...createTextStyle("h3", "textPrimary", theme),
-  },
-  headerSpacer: {
-    width: 40, // Para equilibrar o botão de voltar
-  },
-  listContainer: {
-    padding: theme.spacing.lg,
-    flexGrow: 1,
-  },
-  pedidoCard: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
-    marginBottom: theme.spacing.md,
-    ...(isDarkMode ? {} : theme.shadows.sm),
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: theme.spacing.md,
-  },
-  pedidoInfo: {
-    flex: 1,
-  },
-  pedidoId: {
-    ...createTextStyle("body", "textPrimary", theme),
-    fontWeight: "600",
-  },
-  pedidoData: {
-    ...createTextStyle("caption", "textMuted", theme),
-    marginTop: 2,
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.borderRadius.sm,
-  },
-  statusText: {
-    ...createTextStyle("caption", "white", theme),
-    fontWeight: "600",
-    marginLeft: theme.spacing.xs,
-  },
-  enderecoSection: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: theme.spacing.md,
-    paddingHorizontal: theme.spacing.sm,
-  },
-  enderecoText: {
-    ...createTextStyle("caption", "textMuted", theme),
-    marginLeft: theme.spacing.sm,
-    flex: 1,
-  },
-  produtosSection: {
-    marginBottom: theme.spacing.md,
-  },
-  sectionTitle: {
-    ...createTextStyle("caption", "textPrimary", theme),
-    fontWeight: "600",
-    marginBottom: theme.spacing.sm,
-  },
-  produtoItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: theme.spacing.xs,
-  },
-  produtoNome: {
-    ...createTextStyle("caption", "textPrimary", theme),
-    flex: 1,
-  },
-  produtoPreco: {
-    ...createTextStyle("caption", "textPrimary", theme),
-    fontWeight: "600",
-  },
-  observacoesSection: {
-    marginBottom: theme.spacing.md,
-  },
-  observacoesText: {
-    ...createTextStyle("caption", "textMuted", theme),
-    fontStyle: "italic",
-  },
-  cardFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.borderLight,
-    paddingTop: theme.spacing.md,
-  },
-  totalSection: {
-    flex: 1,
-  },
-  totalLabel: {
-    ...createTextStyle("caption", "textMuted", theme),
-  },
-  totalValue: {
-    ...createTextStyle("body", "textPrimary", theme),
-    fontWeight: "700",
-    fontSize: theme.fontSizes.lg,
-  },
-  detalhesButton: {
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
-  },
-  detalhesButtonText: {
-    ...createTextStyle("caption", "primary", theme),
-    fontWeight: "600",
-    textDecorationLine: "underline",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    ...createTextStyle("body", "textMuted", theme),
-    marginTop: theme.spacing.md,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: theme.spacing.xl,
-  },
-  emptyTitle: {
-    ...createTextStyle("h3", "textPrimary", theme),
-    marginTop: theme.spacing.lg,
-    textAlign: "center",
-  },
-  emptySubtitle: {
-    ...createTextStyle("body", "textMuted", theme),
-    marginTop: theme.spacing.sm,
-    textAlign: "center",
-  },
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
+  back: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  headerTitle: { ...type.h2 },
+  list: { padding: 20, paddingTop: 8, flexGrow: 1 },
+  card: { borderWidth: 1, borderRadius: radius.lg, padding: 16, marginBottom: 12 },
+  top: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  number: { fontFamily: fonts.textBold, fontSize: 16 },
+  total: { ...type.time, fontSize: 17 },
+  small: { ...type.small, marginTop: 2 },
+  empty: { alignItems: "center", paddingVertical: 56, paddingHorizontal: 24 },
+  emptyTitle: { ...type.h2, textAlign: "center" },
+  emptyText: { ...type.body, textAlign: "center", marginTop: 8 },
 });
 
 export default MeusPedidosScreen;

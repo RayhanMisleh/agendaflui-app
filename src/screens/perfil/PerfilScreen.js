@@ -8,7 +8,8 @@ import Skeleton from "../../components/ui/Skeleton";
 import { useAuth } from "../../components/AuthProvider";
 import { useBusiness, useTerms } from "../../business/BusinessProvider";
 import { useTheme } from "../../utils/ThemeContext";
-import { CartService } from "../../services/cartService";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { clearCartFor } from "../../services/cartService";
 import { unregisterDevice } from "../../services/notificationService";
 import { getMe } from "../../api/me";
 import { getMyLoyalty } from "../../api/loyalty";
@@ -89,7 +90,7 @@ const PerfilScreen = ({ navigation }) => {
     try {
       await unregisterDevice();
       await endSession();
-      await CartService.clearAllCart().catch(() => {}); // a Tarefa 6 troca por clearCartFor
+      await clearCartFor(AsyncStorage, slug).catch(() => {});
       if (Platform.OS === "web") {
         navigation.reset({ index: 0, routes: [{ name: "Intro" }] });
       } else {

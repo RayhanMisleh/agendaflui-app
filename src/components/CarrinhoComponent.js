@@ -1,564 +1,93 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Image,
-  StyleSheet,
-  Modal,
-  ScrollView,
-  ActivityIndicator,
-} from "react-native";
-import MaterialIcons from "react-native-vector-icons/MaterialIcons";
+import React from "react";
+import { View, Text, Modal, TouchableOpacity, ScrollView, Image, StyleSheet, TouchableWithoutFeedback } from "react-native";
+import Button from "./ui/Button";
+import Icon from "./ui/Icon";
+import QuantityStepper from "./ui/QuantityStepper";
 import { useTheme } from "../utils/ThemeContext";
-import { CartService } from "../services/cartService";
-import { formatPrice, getProductMainImage } from "../api/products";
-import Toast from "react-native-toast-message";
-import { SafeAreaView } from "react-native-safe-area-context";
-import ConfirmModal from "./ConfirmModal";
+import { useCart } from "../store/useCart";
+import { formatCents } from "../utils/money";
+import { fonts, radius, type } from "../theme/tokens";
 
+// Carrinho rápido, em folha, aberto pelo cabeçalho da Loja. O total é uma estimativa: o pedido devolve o valor de verdade.
 export default function CarrinhoComponent({ visible, onClose, onGoToCart }) {
-  const { theme, themeMode } = useTheme();
-  const isDark = theme?.isDarkMode ?? (themeMode === "dark");
-  const styles = getStyles(theme, isDark);
-
-  const [cartItems, setCartItems] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [confirmModal, setConfirmModal] = useState({
-    visible: false,
-    title: "",
-    message: "",
-    confirmText: "Remover",
-    onConfirm: null,
-    loading: false,
-  });
-
-  useEffect(() => {
-    if (visible) {
-      loadCartItems();
-    }
-  }, [visible]);
-
-  const loadCartItems = async () => {
-    try {
-      setLoading(true);
-      const items = await CartService.getCartItems();
-      const grandTotal = await CartService.getGrandTotal();
-      setCartItems(items);
-      setTotal(grandTotal);
-    } catch (error) {
-      console.error("Erro ao carregar carrinho:", error);
-      Toast.show({
-        type: "error",
-        text1: "Erro",
-        text2: "Não foi possível carregar o carrinho",
-        visibilityTime: 3000,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdateQuantity = async (productId, newQuantity) => {
-    try {
-      await CartService.updateQuantity(productId, newQuantity);
-      await loadCartItems(); // Recarrega os itens
-      Toast.show({
-        type: "success",
-        text1: "Carrinho atualizado",
-        visibilityTime: 2000,
-      });
-    } catch (error) {
-      console.error("Erro ao atualizar quantidade:", error);
-      Toast.show({
-        type: "error",
-        text1: "Erro",
-        text2: "Não foi possível atualizar a quantidade",
-        visibilityTime: 3000,
-      });
-    }
-  };
-
-  const handleRemoveItem = (productId, productName) => {
-    setConfirmModal({
-      visible: true,
-      title: "Remover Produto",
-      message: `Deseja remover "${productName}" do carrinho?`,
-      confirmText: "Remover",
-      onConfirm: async () => {
-        try {
-          setConfirmModal((prev) => ({ ...prev, loading: true }));
-          await CartService.removeFromCart(productId);
-          await loadCartItems();
-          setConfirmModal((prev) => ({ ...prev, visible: false, loading: false }));
-          Toast.show({
-            type: "success",
-            text1: "Produto removido",
-            visibilityTime: 2000,
-          });
-        } catch (error) {
-          console.error("Erro ao remover item:", error);
-          setConfirmModal((prev) => ({ ...prev, loading: false }));
-          Toast.show({
-            type: "error",
-            text1: "Erro",
-            text2: "Não foi possível remover o produto",
-            visibilityTime: 3000,
-          });
-        }
-      },
-    });
-  };
-
-  const handleClearCart = () => {
-    setConfirmModal({
-      visible: true,
-      title: "Limpar Carrinho",
-      message: "Tem certeza que deseja remover todos os itens do carrinho?",
-      confirmText: "Limpar",
-      onConfirm: async () => {
-        try {
-          setConfirmModal((prev) => ({ ...prev, loading: true }));
-          await CartService.clearAllCart();
-          await loadCartItems();
-          setConfirmModal((prev) => ({ ...prev, visible: false, loading: false }));
-          Toast.show({
-            type: "success",
-            text1: "Carrinho limpo com sucesso!",
-            visibilityTime: 2000,
-          });
-          onClose(); // Retorna para a loja ao fechar
-        } catch (error) {
-          console.error("Erro ao limpar carrinho:", error);
-          setConfirmModal((prev) => ({ ...prev, loading: false }));
-          Toast.show({
-            type: "error",
-            text1: "Erro",
-            text2: "Não foi possível limpar o carrinho",
-            visibilityTime: 3000,
-          });
-        }
-      },
-    });
-  };
-
-  const CartItem = ({ item }) => {
-    const mainImage = getProductMainImage(item);
-
-    return (
-      <View style={styles.cartItem}>
-        <View style={styles.itemImageContainer}>
-          {mainImage ? (
-            <Image source={{ uri: mainImage }} style={styles.itemImage} />
-          ) : (
-            <View style={styles.noImageContainer}>
-              <MaterialIcons name="image" size={24} color="#ccc" />
-            </View>
-          )}
-        </View>
-
-        <View style={styles.itemInfo}>
-          <Text style={styles.itemName} numberOfLines={2}>
-            {item.product_name}
-          </Text>
-
-          <View style={styles.quantityContainer}>
-            <TouchableOpacity
-              style={[
-                styles.quantityButton,
-                item.quantity === 1 && styles.quantityButtonDisabled,
-              ]}
-              onPress={() =>
-                handleUpdateQuantity(item.product_id, item.quantity - 1)
-              }
-              disabled={item.quantity === 1}
-            >
-              <MaterialIcons
-                name="remove"
-                size={16}
-                color={item.quantity === 1 ? (isDark ? "#555" : "#AAA") : (isDark ? "#FFF" : "#000")}
-              />
-            </TouchableOpacity>
-
-            <Text style={styles.quantityText}>{item.quantity}</Text>
-
-            <TouchableOpacity
-              style={styles.quantityButton}
-              onPress={() =>
-                handleUpdateQuantity(item.product_id, item.quantity + 1)
-              }
-            >
-              <MaterialIcons name="add" size={16} color={isDark ? "#FFF" : "#000"} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.itemActions}>
-          <Text style={styles.itemTotal}>{formatPrice(item.total_price)}</Text>
-          <TouchableOpacity
-            style={styles.removeButton}
-            onPress={() => handleRemoveItem(item.product_id, item.product_name)}
-          >
-            <MaterialIcons name="delete" size={18} color="#f44336" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const { cart, items, totalCents } = useCart();
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
-      <SafeAreaView style={styles.container}>
-        {/* Header do Modal */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={onClose}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons
-              name="close"
-              size={22}
-              color={isDark ? "#FFFFFF" : "#1A1A1A"}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Meu Carrinho</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Carregando carrinho...</Text>
-          </View>
-        ) : cartItems.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconCircle}>
-              <MaterialIcons
-                name="remove-shopping-cart"
-                size={44}
-                color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"}
-              />
-            </View>
-            <Text style={styles.emptyText}>Seu carrinho está vazio</Text>
-            <Text style={styles.emptySubtext}>
-              Adicione produtos para ver aqui
-            </Text>
-            <TouchableOpacity
-              style={styles.emptyButton}
-              onPress={onClose}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.emptyButtonText}>Explorar Produtos</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-              {/* Produtos */}
-              {cartItems.length > 0 && (
-                <>
-                  <Text style={styles.sectionHeader}>Produtos</Text>
-                  {cartItems.map((item) => (
-                    <CartItem key={item.product_id} item={item} />
-                  ))}
-                </>
-              )}
-            </ScrollView>
-
-            {/* Footer com total e botão */}
-            <View style={styles.footer}>
-              <View style={styles.totalContainer}>
-                <Text style={styles.totalLabel}>Total:</Text>
-                <Text style={styles.totalValue}>{formatPrice(total)}</Text>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={[styles.backdrop, { backgroundColor: c.overlay }]}>
+          <TouchableWithoutFeedback>
+            <View style={[styles.sheet, { backgroundColor: c.ground, borderColor: c.line }]}>
+              <View style={styles.header}>
+                <Text style={[styles.title, { color: c.ink }]}>Seu carrinho</Text>
+                <TouchableOpacity onPress={onClose} accessibilityRole="button" accessibilityLabel="Fechar" style={styles.close}>
+                  <Icon name="x" size={22} color={c.ink} />
+                </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
-                style={styles.checkoutButton}
-                onPress={() => {
-                  onClose();
-                  onGoToCart();
-                }}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons
-                  name="shopping-cart"
-                  size={20}
-                  color="white"
-                  style={styles.checkoutIcon}
-                />
-                <Text style={styles.checkoutText}>Finalizar Compra</Text>
-              </TouchableOpacity>
-              {/* Aviso discreto sobre redirecionamento ao Mercado Pago */}
-              <Text style={styles.captionText}>
-                Ao finalizar, você será redirecionado ao Mercado Pago para concluir o pagamento.
-              </Text>
+              {items.length === 0 ? (
+                <View style={styles.empty}>
+                  <Icon name="shopping-bag" size={32} color={c.inkMuted} />
+                  <Text style={[styles.emptyText, { color: c.inkMuted }]}>Seu carrinho está vazio.</Text>
+                </View>
+              ) : (
+                <>
+                  <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
+                    {items.map((item) => (
+                      <View key={item.productId} style={[styles.row, { backgroundColor: c.surface, borderColor: c.line }]}>
+                        <View style={[styles.thumb, { backgroundColor: c.brandTint }]}>
+                          {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} resizeMode="cover" /> : <Icon name="image" size={20} color={c.brand} />}
+                        </View>
+                        <View style={styles.info}>
+                          <Text style={[styles.name, { color: c.ink }]} numberOfLines={2}>{item.name}</Text>
+                          <Text style={[styles.price, { color: c.inkMuted }]}>{formatCents(item.unitPriceCents)}</Text>
+                          <QuantityStepper
+                            value={item.quantity}
+                            min={0}
+                            max={item.maxQuantity}
+                            onChange={(next) => cart.setQuantity(item.productId, next)}
+                            style={{ marginTop: 8 }}
+                          />
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                  <View style={styles.footer}>
+                    <View style={styles.totalRow}>
+                      <Text style={[styles.totalLabel, { color: c.inkMuted }]}>Total estimado</Text>
+                      <Text style={[styles.total, { color: c.ink }]}>{formatCents(totalCents)}</Text>
+                    </View>
+                    <Button title="Ver carrinho" onPress={onGoToCart} fullWidth size="lg" />
+                  </View>
+                </>
+              )}
             </View>
-          </>
-        )}
-
-        {/* Modal de Confirmação para Remoção */}
-        <ConfirmModal
-          visible={confirmModal.visible}
-          title={confirmModal.title}
-          message={confirmModal.message}
-          confirmText={confirmModal.confirmText}
-          loading={confirmModal.loading}
-          onConfirm={confirmModal.onConfirm}
-          onCancel={() =>
-            setConfirmModal((prev) => ({ ...prev, visible: false }))
-          }
-        />
-      </SafeAreaView>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 }
 
-const getStyles = (theme, isDark) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background || (isDark ? "#0F0F0F" : "#FFFFFF"),
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: isDark ? "#222226" : "#F0F0F0",
-    backgroundColor: isDark ? "#141416" : "#FFFFFF",
-  },
-  closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.04)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 17,
-    fontWeight: "700",
-    color: isDark ? "#FFFFFF" : "#1A1A1A",
-  },
-  headerSpacer: {
-    width: 36,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 15,
-    color: isDark ? "#8A8A90" : "#6B7280",
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 32,
-  },
-  emptyIconCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: isDark ? "rgba(255, 255, 255, 0.06)" : "#F5F7FA",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: isDark ? "#F2F2F5" : "#1A1A1A",
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: isDark ? "#8A8A90" : "#6B7280",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  emptyButton: {
-    backgroundColor: theme.colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  emptyButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  scrollContainer: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  cartItem: {
-    flexDirection: "row",
-    backgroundColor: isDark ? "#1A1A1E" : "#FFFFFF",
-    padding: 14,
-    marginVertical: 5,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: isDark ? "#282830" : "rgba(0,0,0,0.06)",
-    shadowColor: isDark ? "#000" : "rgba(0,0,0,0.08)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: isDark ? 0.3 : 0.06,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  itemImageContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 10,
-    overflow: "hidden",
-    marginRight: 12,
-    backgroundColor: isDark ? "#121214" : "#F0F0F4",
-  },
-  itemImage: {
-    width: "100%",
-    height: "100%",
-  },
-  noImageContainer: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: isDark ? "#16161A" : "#F0F0F4",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  itemInfo: {
-    flex: 1,
-    justifyContent: "space-between",
-  },
-  itemName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: isDark ? "#F2F2F5" : "#1A1A1A",
-    marginBottom: 4,
-  },
-  partnerName: {
-    fontSize: 12,
-    color: isDark ? "#8A8A90" : "#6B7280",
-    marginBottom: 4,
-    fontStyle: "italic",
-  },
-  quantityContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: isDark ? "#121214" : "#F0F0F0",
-    borderRadius: 8,
-    padding: 3,
-    alignSelf: "flex-start",
-  },
-  quantityButton: {
-    width: 28,
-    height: 28,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: isDark ? "#25252B" : "#FFFFFF",
-    borderRadius: 6,
-  },
-  quantityButtonDisabled: {
-    backgroundColor: isDark ? "#18181C" : "#E5E5EA",
-  },
-  quantityText: {
-    fontSize: 14,
-    fontWeight: "700",
-    marginHorizontal: 12,
-    minWidth: 20,
-    textAlign: "center",
-    color: isDark ? "#FFFFFF" : "#1A1A1A",
-  },
-  itemActions: {
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    marginLeft: 8,
-  },
-  itemTotal: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: theme.colors.primary,
-    marginBottom: 8,
-  },
-  removeButton: {
-    padding: 6,
-  },
-  footer: {
-    backgroundColor: isDark ? "#141416" : "#FFFFFF",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 24,
-    borderTopWidth: 1,
-    borderTopColor: isDark ? "#222226" : "#F0F0F0",
-  },
-  totalContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  totalLabel: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: isDark ? "#FFFFFF" : "#1A1A1A",
-  },
-  totalValue: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: theme.colors.primary,
-  },
-  checkoutButton: {
-    backgroundColor: theme.colors.primary,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 16,
-    borderRadius: 14,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  checkoutIcon: {
-    marginRight: 8,
-  },
-  checkoutText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  captionText: {
-    fontSize: 12,
-    color: isDark ? "#9CA3AF" : "#6B7280",
-    textAlign: "center",
-    marginTop: 10,
-    lineHeight: 16,
-  },
-  sectionHeader: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: isDark ? "#FFFFFF" : "#1A1A1A",
-    marginHorizontal: 4,
-    marginVertical: 10,
-    marginTop: 16,
-  },
+const styles = StyleSheet.create({
+  backdrop: { flex: 1, justifyContent: "flex-end" },
+  sheet: { maxHeight: "85%", width: "100%", maxWidth: 800, alignSelf: "center", borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderWidth: 1, paddingBottom: 24 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20, paddingBottom: 8 },
+  title: { ...type.h2 },
+  close: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  empty: { alignItems: "center", padding: 40 },
+  emptyText: { ...type.body, marginTop: 12 },
+  list: { paddingHorizontal: 20 },
+  row: { flexDirection: "row", borderWidth: 1, borderRadius: radius.lg, padding: 12, marginBottom: 10 },
+  thumb: { width: 64, height: 64, borderRadius: radius.sm, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  thumbImage: { width: "100%", height: "100%" },
+  info: { flex: 1, marginLeft: 12 },
+  name: { fontFamily: fonts.textSemi, fontSize: 15, lineHeight: 20 },
+  price: { ...type.small, marginTop: 2 },
+  footer: { paddingHorizontal: 20, paddingTop: 8 },
+  totalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  totalLabel: { ...type.small },
+  total: { fontFamily: fonts.display, fontSize: 22, fontVariant: ["tabular-nums"] },
 });

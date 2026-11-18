@@ -1,80 +1,54 @@
 import React from "react";
-import {
-  View,
-  Text,
-  Modal,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  TouchableWithoutFeedback,
-} from "react-native";
-import MaterialIcons from "react-native-vector-icons/MaterialIcons";
+import { View, Text, Modal, TouchableOpacity, StyleSheet, ActivityIndicator, TouchableWithoutFeedback } from "react-native";
+import Icon from "./ui/Icon";
 import { useTheme } from "../utils/ThemeContext";
+import { fonts, radius, type } from "../theme/tokens";
 
+// Confirmação em janela: título, texto e dois botões. `destructive` pinta a ação de vermelho.
 export default function ConfirmModal({
   visible,
-  title = "Confirmação",
-  message = "Deseja prosseguir com esta ação?",
+  title = "Confirmar",
+  message = "Quer continuar?",
   confirmText = "Confirmar",
-  cancelText = "Cancelar",
-  confirmColor = "#EF4444",
-  iconName = "delete-outline",
+  cancelText = "Voltar",
+  destructive = false,
+  iconName = "alert-circle",
   onConfirm,
   onCancel,
   loading = false,
 }) {
-  const { theme, themeMode } = useTheme();
-  const isDark = theme?.isDarkMode ?? themeMode === "dark";
-  const styles = getStyles(theme, isDark, confirmColor);
-
+  const { theme } = useTheme();
+  const c = theme.colors;
   if (!visible) return null;
+  const accent = destructive ? c.danger : c.brand;
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onCancel}
-    >
-      <TouchableWithoutFeedback onPress={onCancel}>
-        <View style={styles.backdrop}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <TouchableWithoutFeedback onPress={loading ? undefined : onCancel}>
+        <View style={[styles.backdrop, { backgroundColor: c.overlay }]}>
           <TouchableWithoutFeedback>
-            <View style={styles.card}>
-              {/* Ícone de Destaque */}
-              <View style={styles.iconCircle}>
-                <MaterialIcons
-                  name={iconName}
-                  size={28}
-                  color={confirmColor}
-                />
+            <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.line }]}>
+              <View style={[styles.iconBox, { backgroundColor: destructive ? c.carameloTint : c.brandTint }]}>
+                <Icon name={iconName} size={24} color={accent} />
               </View>
-
-              {/* Título e Mensagem */}
-              <Text style={styles.title}>{title}</Text>
-              <Text style={styles.message}>{message}</Text>
-
-              {/* Botões de Ação */}
-              <View style={styles.actionsRow}>
+              <Text style={[styles.title, { color: c.ink }]}>{title}</Text>
+              <Text style={[styles.message, { color: c.inkMuted }]}>{message}</Text>
+              <View style={styles.actions}>
                 <TouchableOpacity
-                  style={styles.cancelButton}
+                  style={[styles.button, { borderColor: c.line, backgroundColor: c.surface }]}
                   onPress={onCancel}
                   disabled={loading}
-                  activeOpacity={0.7}
+                  accessibilityRole="button"
                 >
-                  <Text style={styles.cancelButtonText}>{cancelText}</Text>
+                  <Text style={[styles.buttonText, { color: c.ink }]}>{cancelText}</Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity
-                  style={styles.confirmButton}
+                  style={[styles.button, { borderColor: accent, backgroundColor: accent }]}
                   onPress={onConfirm}
                   disabled={loading}
-                  activeOpacity={0.8}
+                  accessibilityRole="button"
                 >
-                  {loading ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.confirmButtonText}>{confirmText}</Text>
-                  )}
+                  {loading ? <ActivityIndicator size="small" color={c.onBrand} /> : <Text style={[styles.buttonText, { color: c.onBrand }]}>{confirmText}</Text>}
                 </TouchableOpacity>
               </View>
             </View>
@@ -85,87 +59,13 @@ export default function ConfirmModal({
   );
 }
 
-const getStyles = (theme, isDark, confirmColor) =>
-  StyleSheet.create({
-    backdrop: {
-      flex: 1,
-      backgroundColor: "rgba(0, 0, 0, 0.72)",
-      justifyContent: "center",
-      alignItems: "center",
-      paddingHorizontal: 24,
-    },
-    card: {
-      width: "100%",
-      maxWidth: 340,
-      backgroundColor: isDark ? "#1A1A1E" : "#FFFFFF",
-      borderRadius: 24,
-      padding: 24,
-      alignItems: "center",
-      shadowColor: "#000000",
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: isDark ? 0.5 : 0.15,
-      shadowRadius: 20,
-      elevation: 8,
-      borderWidth: 1,
-      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
-    },
-    iconCircle: {
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: isDark ? "rgba(239, 68, 68, 0.12)" : "rgba(239, 68, 68, 0.08)",
-      justifyContent: "center",
-      alignItems: "center",
-      marginBottom: 16,
-    },
-    title: {
-      fontSize: 18,
-      fontWeight: "800",
-      color: isDark ? "#FFFFFF" : "#111827",
-      marginBottom: 8,
-      textAlign: "center",
-    },
-    message: {
-      fontSize: 14,
-      color: isDark ? "#A0A0B0" : "#6B7280",
-      textAlign: "center",
-      lineHeight: 20,
-      marginBottom: 24,
-    },
-    actionsRow: {
-      flexDirection: "row",
-      gap: 12,
-      width: "100%",
-    },
-    cancelButton: {
-      flex: 1,
-      paddingVertical: 13,
-      borderRadius: 14,
-      backgroundColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#F3F4F6",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    cancelButtonText: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: isDark ? "#D1D5DB" : "#4B5563",
-    },
-    confirmButton: {
-      flex: 1,
-      paddingVertical: 13,
-      borderRadius: 14,
-      backgroundColor: confirmColor,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: confirmColor,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.35,
-      shadowRadius: 8,
-      elevation: 3,
-    },
-    confirmButtonText: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: "#FFFFFF",
-    },
-  });
+const styles = StyleSheet.create({
+  backdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  card: { width: "100%", maxWidth: 380, borderRadius: radius.xl, borderWidth: 1, padding: 24, alignItems: "center" },
+  iconBox: { width: 52, height: 52, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", marginBottom: 14 },
+  title: { ...type.h2, textAlign: "center" },
+  message: { ...type.body, textAlign: "center", marginTop: 8 },
+  actions: { flexDirection: "row", gap: 12, marginTop: 24, width: "100%" },
+  button: { flex: 1, minHeight: 48, borderRadius: radius.pill, borderWidth: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
+  buttonText: { fontFamily: fonts.textBold, fontSize: 15 },
+});

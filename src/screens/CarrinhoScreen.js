@@ -1,1165 +1,359 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Image,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Linking,
-} from "react-native";
-import MaterialIcons from "react-native-vector-icons/MaterialIcons";
-import { useTheme } from "../utils/ThemeContext";
-import { CartService } from "../services/cartService";
-import { formatPrice, getProductMainImage } from "../api/products";
-import Toast from "react-native-toast-message";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { View, Text, ScrollView, Image, TouchableOpacity, Platform, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Button from "../components/ui/Button";
+import Icon from "../components/ui/Icon";
+import Skeleton from "../components/ui/Skeleton";
+import QuantityStepper from "../components/ui/QuantityStepper";
+import FormMessage from "../components/entry/FormMessage";
 import EnderecoSelector from "../components/EnderecoSelector";
 import FreteSelector from "../components/FreteSelector";
-import PaymentDataSelector from "../components/PaymentDataSelector";
 import FinalizarCompraModal from "../components/FinalizarCompraModal";
-import ConfirmModal from "../components/ConfirmModal";
-import { createPedido } from "../api/pedidosApi";
-import { createPayment, getNotificationUrl } from "../api/paymentsApi";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "../components/AuthProvider";
+import { useBusiness } from "../business/BusinessProvider";
+import { useTheme } from "../utils/ThemeContext";
+import { useCart } from "../store/useCart";
+import { getStoreOptions, createOrder, startCheckout } from "../api/store";
+import { isFinalRejection } from "../api/idempotency";
+import { toOrderLines, buildDelivery, checkoutReturnUrl, createOrderSubmitter, formatCents } from "../store/order";
+import { openCheckout } from "../store/checkout";
+import { fonts, radius, type } from "../theme/tokens";
 
-export default function CarrinhoScreen({ navigation }) {
-  const { theme, themeMode } = useTheme();
-  const isDark = theme?.isDarkMode ?? (themeMode === "dark");
-  const insets = useSafeAreaInsets();
-  const styles = getStyles(theme, isDark, insets);
+const PAYMENT_OFF = "A loja ainda não recebe pagamentos pelo app.";
+const QUOTE_REASONS = ["quote_expired", "invalid_quote"];
 
-  const [cartItems, setCartItems] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [deliveryMethod, setDeliveryMethod] = useState("DELIVERY"); // "DELIVERY" ou "PICKUP"
-  const [selectedEndereco, setSelectedEndereco] = useState(null);
-  const [selectedFrete, setSelectedFrete] = useState(null);
-  const [paymentData, setPaymentData] = useState({});
-  const [processing, setProcessing] = useState(false);
-  const [showFinalizarModal, setShowFinalizarModal] = useState(false);
-  const [pedidoConfirmado, setPedidoConfirmado] = useState(null);
-  const [confirmModal, setConfirmModal] = useState({
-    visible: false,
-    title: "",
-    message: "",
-    confirmText: "Confirmar",
-    confirmColor: "#EF4444",
-    iconName: "delete-outline",
-    onConfirm: null,
-    loading: false,
-  });
-
-  useEffect(() => {
-    loadCartItems();
-
-    // Listener para quando a tela ganha foco
-    const unsubscribe = navigation.addListener("focus", () => {
-      loadCartItems();
-    });
-
-    return unsubscribe;
-  }, [navigation]);
-
-  const loadCartItems = async () => {
-    try {
-      setLoading(true);
-      const items = await CartService.getCartItems();
-      const grandTotal = await CartService.getGrandTotal();
-      setCartItems(items);
-      setTotal(grandTotal);
-    } catch (error) {
-      console.error("Erro ao carregar carrinho:", error);
-      Toast.show({
-        type: "error",
-        text1: "Erro",
-        text2: "Não foi possível carregar o carrinho",
-        visibilityTime: 3000,
-      });
-    } finally {
-      setLoading(false);
-    }
+// Como mostrar o erro do pedido: o servidor já escreve em pt-BR, a tela só decide o botão.
+function describeOrderError(error) {
+  const reason = error && error.reason;
+  const message = (error && error.message) || "Não deu para fazer o pedido. Tente de novo.";
+  return {
+    message,
+    retry: !isFinalRejection(error), // rede, tempo esgotado ou 5xx: a mesma chave vale
+    openOrders: reason === "too_many_open_orders",
+    requote: QUOTE_REASONS.includes(reason),
   };
+}
 
-  // Calcula o total incluindo frete
-  const getTotalComFrete = () => {
-    const freteValue = deliveryMethod === "PICKUP" ? 0 : (selectedFrete?.preco || 0);
-    return total + freteValue;
-  };
-
-  const handleUpdateQuantity = async (productId, newQuantity) => {
-    try {
-      await CartService.updateQuantity(productId, newQuantity);
-      await loadCartItems();
-      Toast.show({
-        type: "success",
-        text1: "Carrinho atualizado",
-        visibilityTime: 2000,
-      });
-    } catch (error) {
-      console.error("Erro ao atualizar quantidade:", error);
-      Toast.show({
-        type: "error",
-        text1: "Erro",
-        text2: "Não foi possível atualizar a quantidade",
-        visibilityTime: 3000,
-      });
-    }
-  };
-
-  const handleRemoveItem = (productId, productName) => {
-    setConfirmModal({
-      visible: true,
-      title: "Remover Produto",
-      message: `Deseja remover "${productName}" do seu carrinho?`,
-      confirmText: "Remover",
-      iconName: "delete-outline",
-      confirmColor: "#EF4444",
-      onConfirm: async () => {
-        try {
-          setConfirmModal((prev) => ({ ...prev, loading: true }));
-          const updatedItems = await CartService.removeFromCart(productId);
-          await loadCartItems();
-          setConfirmModal((prev) => ({ ...prev, visible: false, loading: false }));
-          Toast.show({
-            type: "success",
-            text1: "Produto removido",
-            visibilityTime: 2000,
-          });
-
-          // Se esvaziou o carrinho, redireciona para a loja
-          if (!updatedItems || updatedItems.length === 0) {
-            navigation.navigate("MainTabs", { screen: "Loja" });
-          }
-        } catch (error) {
-          console.error("Erro ao remover item:", error);
-          setConfirmModal((prev) => ({ ...prev, loading: false }));
-          Toast.show({
-            type: "error",
-            text1: "Erro",
-            text2: "Não foi possível remover o produto",
-            visibilityTime: 3000,
-          });
-        }
-      },
-    });
-  };
-
-  const handleClearCart = () => {
-    setConfirmModal({
-      visible: true,
-      title: "Limpar Carrinho",
-      message:
-        "Tem certeza que deseja remover todos os itens do seu carrinho?",
-      confirmText: "Limpar Carrinho",
-      iconName: "delete-sweep",
-      confirmColor: "#EF4444",
-      onConfirm: async () => {
-        try {
-          setConfirmModal((prev) => ({ ...prev, loading: true }));
-          await CartService.clearAllCart();
-          await loadCartItems();
-          setConfirmModal((prev) => ({ ...prev, visible: false, loading: false }));
-          navigation.navigate("MainTabs", { screen: "Loja" });
-          Toast.show({
-            type: "success",
-            text1: "Carrinho limpo",
-            text2: "Você foi redirecionado para a loja",
-            visibilityTime: 2500,
-          });
-        } catch (error) {
-          console.error("Erro ao limpar carrinho:", error);
-          setConfirmModal((prev) => ({ ...prev, loading: false }));
-          Toast.show({
-            type: "error",
-            text1: "Erro",
-            text2: "Não foi possível limpar o carrinho",
-            visibilityTime: 3000,
-          });
-        }
-      },
-    });
-  };
-
-  const handleEnderecoSelect = (endereco) => {
-    setSelectedEndereco(endereco);
-    // Reset frete quando endereco mudar
-    setSelectedFrete(null);
-  };
-
-  const handlePaymentDataChange = (data) => {
-    setPaymentData(data);
-  };
-
-  const handleFinalizarPagamento = async () => {
-    if (pedidoConfirmado?.paymentResponseData) {
-      setShowFinalizarModal(false);
-      await openPaymentUrl(pedidoConfirmado.paymentResponseData);
-
-      // Navegar para Meus Pedidos após um breve delay
-      setTimeout(() => {
-        navigation.navigate("MeusPedidos");
-      }, 1000);
-    }
-  };
-
-  const handlePagarDepois = () => {
-    setShowFinalizarModal(false);
-    navigation.navigate("MeusPedidos");
-  };
-
-  const handleCloseModal = () => {
-    setShowFinalizarModal(false);
-    navigation.navigate("MeusPedidos");
-  };
-
-  const openPaymentUrl = async (paymentData) => {
-    try {
-      // Usar init_point para produção ou sandbox_init_point para desenvolvimento
-      // Priorizar produção
-      const paymentUrl =
-        paymentData.init_point || paymentData.sandbox_init_point;
-
-      if (!paymentUrl) {
-        throw new Error("URL de pagamento não encontrada na resposta");
-      }
-
-      // Verificar se a URL pode ser aberta
-      const supported = await Linking.canOpenURL(paymentUrl);
-
-      if (supported) {
-
-        // Mostrar feedback antes de redirecionar
-        Toast.show({
-          type: "info",
-          text1: "Redirecionando",
-          text2: "Abrindo gateway do Mercado Pago...",
-          visibilityTime: 2000,
-        });
-
-        // Aguardar um pouco antes de abrir para o usuário ver o toast
-        setTimeout(async () => {
-          await Linking.openURL(paymentUrl);
-        }, 500);
-      } else {
-        console.error("❌ URL não suportada pelo dispositivo");
-        throw new Error("URL de pagamento não suportada pelo dispositivo");
-      }
-    } catch (error) {
-      console.error("❌ Erro ao abrir URL de pagamento:", error);
-      console.error("❌ Stack trace:", error.stack);
-
-      Toast.show({
-        type: "error",
-        text1: "Erro no Redirecionamento",
-        text2: "Não foi possível abrir o gateway de pagamento",
-        visibilityTime: 4000,
-      });
-
-      // Mostrar alert com informações do pagamento e opção de tentar novamente
-      const paymentUrl =
-        paymentData.init_point || paymentData.sandbox_init_point;
-      Alert.alert(
-        "Erro ao Abrir Pagamento",
-        `Não foi possível redirecionar automaticamente.\n\nPedido: ${
-          paymentData.payment?.pedido_id || "N/A"
-        }\nValor: R$ ${
-          paymentData.transaction_amount || "N/A"
-        }\n\nVocê pode acessar o link manualmente ou tentar novamente.`,
-        [
-          { text: "Cancelar", style: "cancel" },
-          {
-            text: "Tentar Novamente",
-            onPress: () => openPaymentUrl(paymentData),
-          },
-          {
-            text: "Ver Link",
-            onPress: () => {
-              Alert.alert("Link do Pagamento", paymentUrl, [{ text: "OK" }]);
-            },
-          },
-        ]
-      );
-    }
-  };
-
-  const handleGoToPayment = async () => {
-    const isPickup = deliveryMethod === "PICKUP";
-    const requiresAddressAndShipping = !isPickup;
-
-    // Validações
-    if (requiresAddressAndShipping) {
-      if (!selectedEndereco) {
-        Alert.alert(
-          "Endereço Obrigatório",
-          "Selecione um endereço de entrega para continuar.",
-          [{ text: "OK" }]
-        );
-        return;
-      }
-
-      if (!selectedFrete) {
-        Alert.alert(
-          "Frete Obrigatório",
-          "Selecione uma opção de frete para continuar.",
-          [{ text: "OK" }]
-        );
-        return;
-      }
-    }
-
-    if (
-      !paymentData ||
-      !paymentData.payer_email ||
-      !paymentData.payer_identification_number
-    ) {
-      Alert.alert(
-        "Dados Obrigatórios",
-        "Preencha todos os dados de pagamento para continuar.",
-        [{ text: "OK" }]
-      );
-      return;
-    }
-
-    // Validação simples de email
-    if (!/\S+@\S+\.\S+/.test(paymentData.payer_email)) {
-      Alert.alert("Email Inválido", "Por favor, insira um email válido.", [
-        { text: "OK" },
-      ]);
-      return;
-    }
-
-    // Validação de CPF (11 dígitos)
-    if (
-      !paymentData.payer_identification_number ||
-      paymentData.payer_identification_number.length !== 11
-    ) {
-      Alert.alert(
-        "CPF Inválido",
-        "Por favor, insira um CPF válido com 11 dígitos.",
-        [{ text: "OK" }]
-      );
-      return;
-    }
-
-    try {
-      setProcessing(true);
-
-      // 1. Criar o pedido
-      const produtos = cartItems.map((item) => ({
-        produto_id: item.product_id,
-        quantidade: item.quantity,
-      }));
-
-      let taxaEntrega = 0;
-      let modalidadeEntrega = "DELIVERY"; // padrão
-
-      if (deliveryMethod === "DELIVERY") {
-        taxaEntrega = selectedFrete?.preco || 0.0;
-      } else {
-        taxaEntrega = 0.0;
-        modalidadeEntrega = "PICKUP";
-      }
-
-      const pedidoPayload = {
-        ...(selectedEndereco?.endereco_id && deliveryMethod === "DELIVERY" && { endereco_id: selectedEndereco.endereco_id }),
-        status: "PENDENTE",
-        statusEntrega: "PENDENTE",
-        statusPagamento: "PENDING",
-        observacoes: modalidadeEntrega === "PICKUP" ? "Retirar na loja" : "",
-        taxa_entrega: taxaEntrega,
-        produtos: produtos,
-      };
-
-      const pedidoResponse = await createPedido(pedidoPayload);
-
-      if (!pedidoResponse.pedido_id) {
-        throw new Error("Erro ao criar pedido: ID não retornado");
-      }
-
-      // 2. Criar o pagamento com nova estrutura
-      const paymentPayload = {
-        pedidoId: pedidoResponse.pedido_id,
-        installments: paymentData.installments || 1,
-        payerData: {
-          email: paymentData.payer_email,
-          identification: {
-            type: paymentData.payer_identification_type || "CPF",
-            number: paymentData.payer_identification_number,
-          },
-        },
-      };
-
-      const paymentResponse = await createPayment(paymentPayload);
-
-      // Verificar se a resposta tem a estrutura esperada
-      if (
-        !paymentResponse ||
-        (!paymentResponse.data &&
-          !paymentResponse.init_point &&
-          !paymentResponse.sandbox_init_point)
-      ) {
-        throw new Error("Resposta inválida da API de pagamento");
-      }
-
-      // Normalizar a resposta (pode vir direto ou dentro de 'data')
-      const paymentResponseData = paymentResponse.data || paymentResponse;
-
-      // 3. Limpar carrinho após sucesso da criação do pedido/pagamento
-      await CartService.clearAllCart();
-
-      // 4. Mostrar sucesso
-      Toast.show({
-        type: "success",
-        text1: "Pedido Criado!",
-        text2: "Configurando pagamento...",
-        visibilityTime: 2000,
-      });
-
-      // 5. Preparar dados para o modal
-
-      let freteParaModal = selectedFrete;
-
-      if (deliveryMethod === "PICKUP") {
-        freteParaModal = {
-          serviceCode: "PICKUP",
-          serviceDescription: "Retirar na loja",
-          carrier: "Loja",
-          preco: 0,
-          deliveryTime: "Imediata",
-        };
-      }
-
-      const dadosPedido = {
-        pedidoId: pedidoResponse.pedido_id,
-        endereco: selectedEndereco,
-        total: getTotalComFrete(),
-        frete: freteParaModal,
-        installments: paymentData.installments || 1,
-        paymentResponseData: paymentResponseData,
-      };
-
-      // 6. Mostrar modal de confirmação
-      setPedidoConfirmado(dadosPedido);
-      setShowFinalizarModal(true);
-    } catch (error) {
-      console.error("Erro no processo de pagamento:", error);
-
-      Toast.show({
-        type: "error",
-        text1: "Erro no Pagamento",
-        text2:
-          error.response?.data?.message ||
-          "Não foi possível processar o pedido",
-        visibilityTime: 4000,
-      });
-
-      Alert.alert(
-        "Erro no Pagamento",
-        "Não foi possível processar seu pedido. Tente novamente.",
-        [{ text: "OK" }]
-      );
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const CartItem = ({ item }) => {
-    const mainImage = getProductMainImage(item);
-
-    return (
-      <View style={styles.cartItem}>
-        <View style={styles.itemImageContainer}>
-          {mainImage ? (
-            <Image source={{ uri: mainImage }} style={styles.itemImage} />
-          ) : (
-            <View style={styles.noImageContainer}>
-              <MaterialIcons name="image" size={32} color={isDark ? "#555" : "#ccc"} />
-            </View>
-          )}
-        </View>
-
-        <View style={styles.itemInfo}>
-          <Text style={styles.itemName} numberOfLines={2}>
-            {item.product_name}
-          </Text>
-          <Text style={styles.itemCategory}>
-            {item.product_category || "Categoria"}
-          </Text>
-
-          <View style={styles.quantityContainer}>
-            <TouchableOpacity
-              style={[
-                styles.quantityButton,
-                item.quantity === 1 && styles.quantityButtonDisabled,
-              ]}
-              onPress={() =>
-                handleUpdateQuantity(item.product_id, item.quantity - 1)
-              }
-              disabled={item.quantity === 1}
-            >
-              <MaterialIcons
-                name="remove"
-                size={18}
-                color={item.quantity === 1 ? (isDark ? "#555" : "#AAA") : (isDark ? "#FFF" : "#000")}
-              />
-            </TouchableOpacity>
-
-            <Text style={styles.quantityText}>{item.quantity}</Text>
-
-            <TouchableOpacity
-              style={styles.quantityButton}
-              onPress={() =>
-                handleUpdateQuantity(item.product_id, item.quantity + 1)
-              }
-            >
-              <MaterialIcons name="add" size={18} color={isDark ? "#FFF" : "#000"} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.itemActions}>
-          <Text style={styles.itemTotal}>{formatPrice(item.total_price)}</Text>
-          <TouchableOpacity
-            style={styles.removeButton}
-            onPress={() => handleRemoveItem(item.product_id, item.product_name)}
-          >
-            <MaterialIcons name="delete" size={20} color="#f44336" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
-  const isCheckoutValid = () => {
-    if (cartItems.length === 0) return false;
-
-    if (deliveryMethod === "DELIVERY") {
-      if (!selectedEndereco || !selectedFrete) return false;
-    }
-
-    if (
-      !paymentData.payer_email ||
-      !paymentData.payer_identification_number ||
-      paymentData.payer_identification_number.length !== 11
-    ) {
-      return false;
-    }
-
-    return true;
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={styles.loadingText}>Carregando carrinho...</Text>
-      </View>
-    );
-  }
-
-  if (cartItems.length === 0) {
-    return (
-      <View style={styles.container}>
-        {/* Header com botão de voltar para nunca travar o usuário */}
-        <View
-          style={[
-            styles.header,
-            {
-              paddingTop:
-                (Platform.OS === "ios"
-                  ? insets.top || 44
-                  : insets.top || 20) + 4,
-            },
-          ]}
-        >
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => {
-              if (navigation.canGoBack()) {
-                navigation.goBack();
-              } else {
-                navigation.navigate("MainTabs", { screen: "Loja" });
-              }
-            }}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons
-              name="arrow-back"
-              size={22}
-              color={isDark ? "#FFFFFF" : "#1A1A1A"}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Meu Carrinho</Text>
-          <View style={{ width: 40 }} />
-        </View>
-
-        <View style={styles.emptyContainer}>
-          <View style={styles.emptyIconCircle}>
-            <MaterialIcons
-              name="remove-shopping-cart"
-              size={48}
-              color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"}
-            />
-          </View>
-          <Text style={styles.emptyText}>Seu carrinho está vazio</Text>
-          <Text style={styles.emptySubtext}>
-            Adicione produtos para finalizar sua compra
-          </Text>
-          <TouchableOpacity
-            style={styles.continueShoppingButton}
-            onPress={() => navigation.navigate("MainTabs", { screen: "Loja" })}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.continueShoppingText}>Ir para a Loja</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Modal de Confirmação */}
-        <ConfirmModal
-          visible={confirmModal.visible}
-          title={confirmModal.title}
-          message={confirmModal.message}
-          confirmText={confirmModal.confirmText}
-          confirmColor={confirmModal.confirmColor}
-          iconName={confirmModal.iconName}
-          loading={confirmModal.loading}
-          onConfirm={confirmModal.onConfirm}
-          onCancel={() =>
-            setConfirmModal((prev) => ({ ...prev, visible: false }))
-          }
-        />
-      </View>
-    );
-  }
-
+function Section({ title, subtitle, children, c }) {
   return (
-    <View style={styles.container}>
-      {/* Header da tela */}
-      <View style={[styles.header, { paddingTop: (Platform.OS === "ios" ? insets.top || 44 : insets.top || 20) + 4 }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <MaterialIcons name="arrow-back" size={22} color={isDark ? "#FFFFFF" : "#1A1A1A"} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Meu Carrinho</Text>
-        <TouchableOpacity
-          style={styles.clearButton}
-          onPress={handleClearCart}
-          activeOpacity={0.7}
-        >
-          <MaterialIcons name="delete-sweep" size={22} color="#f44336" />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        <View style={styles.itemsHeader}>
-          <Text style={styles.itemsCount}>
-            {cartItems.length}{" "}
-            {cartItems.length === 1
-              ? "item"
-              : "itens"}
-          </Text>
-        </View>
-
-        {/* Produtos */}
-        {cartItems.length > 0 && (
-          <>
-            <Text style={styles.sectionHeader}>Produtos</Text>
-            {cartItems.map((item) => (
-              <CartItem key={item.product_id} item={item} />
-            ))}
-          </>
-        )}
-
-        {/* Modalidade de Entrega */}
-        {cartItems.length > 0 && (
-          <View style={styles.deliveryMethodContainer}>
-            <Text style={styles.sectionHeader}>Forma de Entrega</Text>
-            <View style={styles.deliveryTabs}>
-              <TouchableOpacity
-                style={[
-                  styles.deliveryTab,
-                  deliveryMethod === "DELIVERY" && styles.deliveryTabActive,
-                ]}
-                onPress={() => setDeliveryMethod("DELIVERY")}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons
-                  name="local-shipping"
-                  size={20}
-                  color={deliveryMethod === "DELIVERY" ? "#FFFFFF" : (isDark ? "#8A8A90" : "#6B7280")}
-                />
-                <Text
-                  style={[
-                    styles.deliveryTabText,
-                    deliveryMethod === "DELIVERY" && styles.deliveryTabTextActive,
-                  ]}
-                >
-                  Receber em Casa
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[
-                  styles.deliveryTab,
-                  deliveryMethod === "PICKUP" && styles.deliveryTabActive,
-                ]}
-                onPress={() => setDeliveryMethod("PICKUP")}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons
-                  name="storefront"
-                  size={20}
-                  color={deliveryMethod === "PICKUP" ? "#FFFFFF" : (isDark ? "#8A8A90" : "#6B7280")}
-                />
-                <Text
-                  style={[
-                    styles.deliveryTabText,
-                    deliveryMethod === "PICKUP" && styles.deliveryTabTextActive,
-                  ]}
-                >
-                  Retirar na loja
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Seleção de Endereço (Apenas se Delivery) */}
-        {cartItems.length > 0 && deliveryMethod === "DELIVERY" && (
-          <>
-            <EnderecoSelector
-              onEnderecoSelect={handleEnderecoSelect}
-              selectedEnderecoId={selectedEndereco?.endereco_id}
-            />
-
-            {/* Seleção de Frete */}
-            {selectedEndereco && (
-              <FreteSelector
-                endereco={selectedEndereco}
-                cartItems={cartItems}
-                onFreteSelect={setSelectedFrete}
-                selectedFrete={selectedFrete}
-              />
-            )}
-          </>
-        )}
-
-        {/* Dados para Pagamento */}
-        <PaymentDataSelector onPaymentDataChange={handlePaymentDataChange} />
-      </ScrollView>
-
-      {/* Footer com resumo e botão de pagamento */}
-      <View style={styles.footer}>
-        <View style={styles.summarySection}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal:</Text>
-            <Text style={styles.summaryValue}>{formatPrice(total)}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Entrega:</Text>
-            <Text style={styles.summaryValue}>
-              {deliveryMethod === "PICKUP"
-                ? "Grátis (Retirada)"
-                : selectedFrete
-                ? formatPrice(selectedFrete.preco)
-                : "Selecione o endereço"}
-            </Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total:</Text>
-            <Text style={styles.totalValue}>
-              {formatPrice(getTotalComFrete())}
-            </Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={[
-            styles.checkoutButton,
-            !isCheckoutValid() && styles.checkoutButtonDisabled,
-          ]}
-          disabled={processing || !isCheckoutValid()}
-          onPress={handleGoToPayment}
-          activeOpacity={0.8}
-        >
-          {processing ? (
-            <ActivityIndicator size="small" color="white" />
-          ) : (
-            <>
-              <MaterialIcons
-                name="shopping-cart"
-                size={20}
-                color={!isCheckoutValid() ? (isDark ? "#888" : theme.colors.textMuted) : "white"}
-                style={styles.checkoutIcon}
-              />
-              <Text
-                style={[
-                  styles.checkoutText,
-                  !isCheckoutValid() && styles.checkoutTextDisabled,
-                ]}
-              >
-                Finalizar Compra
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* Modal de Finalizar Compra */}
-      <FinalizarCompraModal
-        visible={showFinalizarModal}
-        onClose={handleCloseModal}
-        onFinalizarPagamento={handleFinalizarPagamento}
-        onPagarDepois={handlePagarDepois}
-        pedidoData={pedidoConfirmado}
-        loading={processing}
-      />
-
-      {/* Modal de Confirmação para Remoção / Limpeza */}
-      <ConfirmModal
-        visible={confirmModal.visible}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        confirmText={confirmModal.confirmText}
-        confirmColor={confirmModal.confirmColor}
-        iconName={confirmModal.iconName}
-        loading={confirmModal.loading}
-        onConfirm={confirmModal.onConfirm}
-        onCancel={() =>
-          setConfirmModal((prev) => ({ ...prev, visible: false }))
-        }
-      />
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, { color: c.ink }]}>{title}</Text>
+      {subtitle ? <Text style={[styles.sectionSub, { color: c.inkMuted }]}>{subtitle}</Text> : null}
+      <View style={{ marginTop: 12 }}>{children}</View>
     </View>
   );
 }
 
-const getStyles = (theme, isDark, insets) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background || (isDark ? "#0F0F0F" : "#FFFFFF"),
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: isDark ? "#222226" : "#F0F0F0",
-    backgroundColor: isDark ? "#141416" : "#FFFFFF",
-    zIndex: 10,
-  },
-  backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.04)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 17,
-    fontWeight: "700",
-    color: isDark ? "#FFFFFF" : "#1A1A1A",
-  },
-  clearButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: isDark ? "rgba(244, 67, 54, 0.12)" : "rgba(244, 67, 54, 0.06)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 15,
-    color: isDark ? "#8A8A90" : theme.colors.textMuted,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 32,
-  },
-  emptyIconCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: isDark ? "rgba(255, 255, 255, 0.06)" : "#F5F7FA",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  emptyText: {
-    fontSize: 19,
-    fontWeight: "700",
-    color: isDark ? "#F2F2F5" : "#1A1A1A",
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: isDark ? "#8A8A90" : theme.colors.textMuted,
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  continueShoppingButton: {
-    backgroundColor: theme.colors.primary,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 24,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  continueShoppingText: {
-    color: "white",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  itemsHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: isDark ? "#121214" : "#F8F9FA",
-    borderBottomWidth: 1,
-    borderBottomColor: isDark ? "#222226" : "#F0F0F0",
-  },
-  itemsCount: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: isDark ? "#D0D0D5" : theme.colors.foreground,
-  },
-  deliveryMethodContainer: {
-    marginVertical: 12,
-    paddingHorizontal: 16,
-  },
-  deliveryTabs: {
-    flexDirection: "row",
-    backgroundColor: isDark ? "#121214" : "#F0F0F0",
-    borderRadius: 10,
-    padding: 3,
-    marginTop: 6,
-  },
-  deliveryTab: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
-  },
-  deliveryTabActive: {
-    backgroundColor: theme.colors.primary,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  deliveryTabText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: isDark ? "#8A8A90" : "#6B7280",
-  },
-  deliveryTabTextActive: {
-    color: "#FFFFFF",
-  },
-  cartItem: {
-    flexDirection: "row",
-    backgroundColor: isDark ? "#1A1A1E" : "#FFFFFF",
-    padding: 14,
-    marginVertical: 4,
-    marginHorizontal: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: isDark ? "#282830" : "rgba(0,0,0,0.06)",
-    shadowColor: isDark ? "#000" : "rgba(0,0,0,0.06)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: isDark ? 0.3 : 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  itemImageContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 10,
-    overflow: "hidden",
-    marginRight: 14,
-    backgroundColor: isDark ? "#121214" : "#F0F0F4",
-  },
-  itemImage: {
-    width: "100%",
-    height: "100%",
-  },
-  noImageContainer: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: isDark ? "#16161A" : "#F0F0F4",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  itemInfo: {
-    flex: 1,
-    justifyContent: "space-between",
-  },
-  itemName: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: isDark ? "#F2F2F5" : theme.colors.foreground,
-    marginBottom: 4,
-  },
-  itemCategory: {
-    fontSize: 12,
-    color: isDark ? "#8A8A90" : "#6B7280",
-    marginBottom: 2,
-  },
-  itemPrice: {
-    fontSize: 14,
-    color: theme.colors.primary,
-    fontWeight: "700",
-  },
-  quantityContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: isDark ? "#121214" : "#F0F0F0",
-    borderRadius: 8,
-    padding: 3,
-    alignSelf: "flex-start",
-    marginTop: 6,
-  },
-  quantityButton: {
-    width: 28,
-    height: 28,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: isDark ? "#25252B" : "#FFFFFF",
-    borderRadius: 6,
-  },
-  quantityButtonDisabled: {
-    backgroundColor: isDark ? "#18181C" : "#E5E5EA",
-  },
-  quantityText: {
-    fontSize: 14,
-    fontWeight: "700",
-    marginHorizontal: 12,
-    minWidth: 20,
-    textAlign: "center",
-    color: isDark ? "#FFFFFF" : "#1A1A1A",
-  },
-  itemActions: {
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    marginLeft: 12,
-  },
-  itemTotal: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: theme.colors.primary,
-    marginBottom: 12,
-  },
-  removeButton: {
-    padding: 6,
-  },
-  footer: {
-    backgroundColor: isDark ? "#141416" : "#FFFFFF",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 24,
-    borderTopWidth: 1,
-    borderTopColor: isDark ? "#222226" : "#F0F0F0",
-  },
-  summarySection: {
-    marginBottom: 16,
-  },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: isDark ? "#8A8A90" : theme.colors.textMuted,
-  },
-  summaryValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: isDark ? "#F2F2F5" : theme.colors.foreground,
-  },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: isDark ? "#222226" : "#F0F0F0",
-  },
-  totalLabel: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: isDark ? "#FFFFFF" : "#1A1A1A",
-  },
-  totalValue: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: theme.colors.primary,
-  },
-  checkoutButton: {
-    backgroundColor: theme.colors.primary,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 16,
-    borderRadius: 14,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  checkoutButtonDisabled: {
-    backgroundColor: isDark ? "#24242A" : "#E5E5EA",
-  },
-  checkoutIcon: {
-    marginRight: 8,
-  },
-  checkoutText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  checkoutTextDisabled: {
-    color: isDark ? "#666" : "#9CA3AF",
-  },
-  captionText: {
-    fontSize: 12,
-    color: isDark ? "#9CA3AF" : "#6B7280",
-  },
-  sectionHeader: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: isDark ? "#FFFFFF" : "#1A1A1A",
-    marginHorizontal: 16,
-    marginVertical: 12,
-    marginTop: 18,
-  },
+function ChoiceCard({ icon, title, text, selected, onPress, c }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      style={[styles.choice, { backgroundColor: selected ? c.brandTint : c.surface, borderColor: selected ? c.brand : c.line }]}
+    >
+      <View style={[styles.choiceIcon, { backgroundColor: selected ? c.surface : c.brandTint }]}>
+        <Icon name={icon} size={18} color={c.brand} />
+      </View>
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <Text style={[styles.choiceTitle, { color: c.ink }]}>{title}</Text>
+        {text ? <Text style={[styles.choiceText, { color: c.inkMuted }]}>{text}</Text> : null}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+export default function CarrinhoScreen({ navigation }) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const { isAuthenticated } = useAuth();
+  const { slug } = useBusiness();
+  const { cart, items, totalCents, loaded } = useCart();
+  const submitter = useRef(createOrderSubmitter({ send: createOrder })).current;
+  const sendingRef = useRef(false);
+  const payingRef = useRef(false);
+
+  const [options, setOptions] = useState(null);
+  const [optionsError, setOptionsError] = useState(null);
+  const [method, setMethod] = useState(null);
+  const [address, setAddress] = useState(null);
+  const [shipping, setShipping] = useState(null);
+  const [quoteKey, setQuoteKey] = useState(0);
+  const [notice, setNotice] = useState("");
+  const [review, setReview] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState(null);
+  const [payError, setPayError] = useState(null);
+  const [order, setOrder] = useState(null);
+
+  const loadOptions = useCallback(async () => {
+    setOptionsError(null);
+    try {
+      const result = await getStoreOptions();
+      setOptions(result);
+      setMethod((current) => current || (result.pickup.enabled ? "PICKUP" : result.shipping.enabled ? "SHIPPING" : null));
+    } catch (failure) {
+      setOptionsError(failure.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) loadOptions();
+  }, [isAuthenticated, slug, loadOptions]);
+
+  // A entrega só vale com tudo definido; a opção de frete é do endereço em que foi cotada.
+  const quoteOk = shipping && address && shipping.addressId === address.id;
+  const choice =
+    method === "PICKUP"
+      ? { method: "PICKUP" }
+      : method === "SHIPPING" && quoteOk
+        ? { method: "SHIPPING", addressId: address.id, quoteToken: shipping.quoteToken }
+        : null;
+  const paymentOn = Boolean(options && options.payment.available);
+  const shippingCents = method === "SHIPPING" && quoteOk ? shipping.priceCents : 0;
+  const canReview = items.length > 0 && choice !== null && paymentOn;
+
+  const goToOrder = (orderId) => navigation.replace("MeusPedidos", { screen: "PedidoDetalhes", params: { orderId }, initial: false });
+
+  const pay = async (target) => {
+    if (payingRef.current) return;
+    payingRef.current = true;
+    setPaying(true);
+    setPayError(null);
+    try {
+      const origin = Platform.OS === "web" && typeof window !== "undefined" ? window.location.origin : null;
+      const checkout = await startCheckout(target.id, checkoutReturnUrl({ platform: Platform.OS, origin, slug, orderId: target.id }));
+      await openCheckout(checkout.checkoutUrl);
+      // Celular: o navegador fechou; o pedido abre e busca o valor de novo. Na web a página já foi ao pagamento.
+      if (Platform.OS !== "web") goToOrder(target.id);
+    } catch (failure) {
+      setPayError(failure.message);
+    } finally {
+      payingRef.current = false;
+      setPaying(false);
+    }
+  };
+
+  const confirm = async () => {
+    if (sendingRef.current || submitter.isSending() || !canReview) return;
+    sendingRef.current = true;
+    setSending(true);
+    setError(null);
+    let created;
+    try {
+      created = await submitter.submit({ lines: toOrderLines(items), delivery: buildDelivery(choice) });
+    } catch (failure) {
+      const shown = describeOrderError(failure);
+      if (shown.requote) {
+        // A cotação venceu ou não vale mais: cota de novo e a pessoa escolhe outra vez.
+        setReview(false);
+        setNotice(shown.message);
+        setShipping(null);
+        setQuoteKey((key) => key + 1);
+      } else {
+        setError(shown);
+      }
+      sendingRef.current = false;
+      setSending(false);
+      return;
+    }
+    sendingRef.current = false;
+    setSending(false);
+    try {
+      await cart.clear();
+    } catch (failure) {
+      // o pedido já existe; o carrinho velho só sobra até a próxima limpeza
+    }
+    setOrder(created);
+    await pay(created);
+  };
+
+  const closeReview = () => {
+    if (sending || paying) return;
+    // Pedido já feito: a janela não fecha para o carrinho vazio, vai ao pedido.
+    if (order) {
+      goToOrder(order.id);
+      return;
+    }
+    setReview(false);
+    setError(null);
+    setPayError(null);
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: c.ground }]} edges={["top", "bottom"]}>
+        <Header navigation={navigation} c={c} />
+        <View style={styles.empty}>
+          <Text style={[styles.emptyTitle, { color: c.ink }]}>Entre para ver o carrinho</Text>
+          <Button title="Entrar" onPress={() => navigation.navigate("Login")} style={{ marginTop: 16 }} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const delivery =
+    method === "SHIPPING"
+      ? { method: "SHIPPING", address, option: quoteOk ? shipping : null }
+      : { method: "PICKUP", instructions: options && options.pickup.instructions };
+
+  return (
+    <SafeAreaView style={[styles.safe, { backgroundColor: c.ground }]} edges={["top", "bottom"]}>
+      <Header navigation={navigation} c={c} />
+
+      {!loaded ? (
+        <View style={styles.pad}>
+          <Skeleton width="100%" height={96} style={{ borderRadius: radius.lg }} />
+        </View>
+      ) : items.length === 0 && !order ? (
+        <View style={styles.empty}>
+          <Icon name="shopping-bag" size={36} color={c.inkMuted} />
+          <Text style={[styles.emptyTitle, { color: c.ink }]}>Seu carrinho está vazio</Text>
+          <Text style={[styles.emptyText, { color: c.inkMuted }]}>Escolha produtos na loja para fazer um pedido.</Text>
+          <Button title="Ver produtos" onPress={() => navigation.navigate("MainTabs", { screen: "Loja" })} style={{ marginTop: 16 }} />
+        </View>
+      ) : (
+        <>
+          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {notice ? <FormMessage kind="info">{notice}</FormMessage> : null}
+            {optionsError ? (
+              <View>
+                <FormMessage kind="error">{optionsError}</FormMessage>
+                <Button title="Tentar de novo" variant="secondary" size="sm" onPress={loadOptions} style={{ alignSelf: "flex-start" }} />
+              </View>
+            ) : null}
+            {options && !paymentOn ? <FormMessage kind="info">{PAYMENT_OFF}</FormMessage> : null}
+
+            <Section title="Seus itens" c={c}>
+              {items.map((item) => (
+                <View key={item.productId} style={[styles.item, { backgroundColor: c.surface, borderColor: c.line }]}>
+                  <View style={[styles.thumb, { backgroundColor: c.brandTint }]}>
+                    {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} resizeMode="cover" /> : <Icon name="image" size={22} color={c.brand} />}
+                  </View>
+                  <View style={styles.itemInfo}>
+                    <Text style={[styles.itemName, { color: c.ink }]} numberOfLines={2}>{item.name}</Text>
+                    <Text style={[styles.itemPrice, { color: c.inkMuted }]}>{formatCents(item.unitPriceCents)}</Text>
+                    <View style={styles.itemActions}>
+                      <QuantityStepper value={item.quantity} max={item.maxQuantity} onChange={(next) => cart.setQuantity(item.productId, next)} />
+                      <TouchableOpacity onPress={() => cart.remove(item.productId)} accessibilityRole="button" accessibilityLabel={`Tirar ${item.name}`} style={styles.remove}>
+                        <Icon name="trash-2" size={18} color={c.inkMuted} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </Section>
+
+            {options ? (
+              <Section title="Como receber" c={c}>
+                {!options.pickup.enabled && !options.shipping.enabled ? (
+                  <FormMessage kind="info">A loja ainda não está combinando retirada nem entrega pelo app.</FormMessage>
+                ) : null}
+                {options.pickup.enabled ? (
+                  <ChoiceCard c={c} icon="map-pin" title="Retirar na loja" text={options.pickup.instructions} selected={method === "PICKUP"} onPress={() => setMethod("PICKUP")} />
+                ) : null}
+                {options.shipping.enabled ? (
+                  <ChoiceCard c={c} icon="truck" title="Receber em casa" text="Escolha o endereço e o frete." selected={method === "SHIPPING"} onPress={() => setMethod("SHIPPING")} />
+                ) : null}
+              </Section>
+            ) : !optionsError ? (
+              <Skeleton width="100%" height={72} style={{ borderRadius: radius.lg }} />
+            ) : null}
+
+            {options && method === "SHIPPING" ? (
+              <>
+                <Section title="Endereço" c={c}>
+                  <EnderecoSelector selectedId={address ? address.id : null} onSelect={setAddress} />
+                </Section>
+                <Section title="Frete" subtitle="O valor vale por 30 minutos." c={c}>
+                  <FreteSelector
+                    addressId={address ? address.id : null}
+                    items={items}
+                    refreshKey={quoteKey}
+                    pickupEnabled={options.pickup.enabled}
+                    onChange={setShipping}
+                  />
+                </Section>
+              </>
+            ) : null}
+          </ScrollView>
+
+          <View style={[styles.bar, { backgroundColor: c.surface, borderTopColor: c.line }]}>
+            <View style={styles.barTotal}>
+              <Text style={[styles.barLabel, { color: c.inkMuted }]}>Total estimado</Text>
+              <Text style={[styles.barValue, { color: c.ink }]}>{formatCents(totalCents + shippingCents)}</Text>
+            </View>
+            {paymentOn ? (
+              <Button title="Finalizar pedido" onPress={() => { setNotice(""); setReview(true); }} disabled={!canReview} fullWidth size="lg" />
+            ) : null}
+          </View>
+
+          <FinalizarCompraModal
+            visible={review}
+            items={items}
+            delivery={delivery}
+            itemsCents={totalCents}
+            order={order}
+            sending={sending}
+            paying={paying}
+            error={error}
+            payError={payError}
+            onConfirm={confirm}
+            onClose={closeReview}
+            onPay={() => order && pay(order)}
+            onViewOrder={() => order && goToOrder(order.id)}
+            onViewOrders={() => {
+              setReview(false);
+              navigation.navigate("MeusPedidos");
+            }}
+          />
+        </>
+      )}
+    </SafeAreaView>
+  );
+}
+
+function Header({ navigation, c }) {
+  return (
+    <View style={styles.header}>
+      <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Voltar">
+        <Icon name="arrow-left" size={24} color={c.ink} />
+      </TouchableOpacity>
+      <Text style={[styles.headerTitle, { color: c.ink }]}>Carrinho</Text>
+      <View style={styles.back} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
+  back: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  headerTitle: { ...type.h2 },
+  pad: { padding: 20 },
+  scroll: { padding: 20, paddingTop: 4, paddingBottom: 32 },
+  section: { marginBottom: 24 },
+  sectionTitle: { ...type.h2 },
+  sectionSub: { ...type.small, marginTop: 2 },
+  item: { flexDirection: "row", borderWidth: 1, borderRadius: radius.lg, padding: 12, marginBottom: 10 },
+  thumb: { width: 72, height: 72, borderRadius: radius.sm, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  thumbImage: { width: "100%", height: "100%" },
+  itemInfo: { flex: 1, marginLeft: 12 },
+  itemName: { fontFamily: fonts.textSemi, fontSize: 15, lineHeight: 20 },
+  itemPrice: { ...type.small, marginTop: 2 },
+  itemActions: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 },
+  remove: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  choice: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: radius.lg, padding: 14, marginBottom: 10 },
+  choiceIcon: { width: 36, height: 36, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
+  choiceTitle: { fontFamily: fonts.textBold, fontSize: 15, lineHeight: 20 },
+  choiceText: { ...type.small, marginTop: 2 },
+  bar: { padding: 16, borderTopWidth: 1 },
+  barTotal: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  barLabel: { ...type.small },
+  barValue: { fontFamily: fonts.display, fontSize: 22, fontVariant: ["tabular-nums"] },
+  empty: { alignItems: "center", paddingVertical: 56, paddingHorizontal: 24 },
+  emptyTitle: { ...type.h2, textAlign: "center", marginTop: 12 },
+  emptyText: { ...type.body, textAlign: "center", marginTop: 8 },
 });

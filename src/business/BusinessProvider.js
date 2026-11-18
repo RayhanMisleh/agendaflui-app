@@ -3,7 +3,7 @@ import { Alert, AppState, Linking, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api, sessionTokens, setActiveSlug, setSessionHandlers } from "../api";
 import { fetchBusiness } from "../api/business";
-import { CartService } from "../services/cartService";
+import { clearCartFor } from "../services/cartService";
 import { unregisterDevice } from "../services/notificationService";
 import { createBusinessStore } from "./businessStore";
 import { decideStoreSwitch, parseStoreLink, stripStoreFromAddress } from "./storeLink";
@@ -94,7 +94,7 @@ export function BusinessProvider({ children }) {
       slug,
       tokens: sessionTokens,
       businessStore,
-      clearCart: () => CartService.clearAllCart(), // a Tarefa 6 troca por clearCartFor(slug)
+      clearCart: () => clearCartFor(AsyncStorage, slug), // o carrinho é da loja que a pessoa deixa
       clearPush: unregisterDevice, // o aparelho sai da loja antes de a sessão acabar
     });
   }, []);

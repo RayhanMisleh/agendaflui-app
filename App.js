@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { StatusBar } from "expo-status-bar";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { createStackNavigator } from "@react-navigation/stack";
@@ -31,6 +31,7 @@ import { BusinessProvider, useBusiness } from "./src/business/BusinessProvider";
 import LoadingScreen from "./src/components/LoadingScreen";
 import Button from "./src/components/ui/Button";
 import { registerDevice } from "./src/services/notificationService";
+import { useOrderLink } from "./src/store/useOrderLink";
 import { ThemeProvider, useTheme } from "./src/utils/ThemeContext";
 import { ROUTES } from "./src/navigation/routes";
 import { colors, type } from "./src/theme/tokens";
@@ -40,6 +41,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Toast from "react-native-toast-message";
 
 const Stack = createStackNavigator();
+const navigationRef = createNavigationContainerRef();
 
 // A loja escolhida não responde (suspensa ou sem rede e sem dados guardados).
 const LojaIndisponivel = () => {
@@ -68,6 +70,9 @@ const RootNavigator = () => {
   const { isDarkMode } = theme;
   const notificationListener = useRef();
   const responseListener = useRef();
+
+  // Volta do pagamento na web: /<loja>/pedidos/<id> abre o pedido.
+  useOrderLink(navigationRef);
 
   // Inicializar push notifications quando o usuário estiver autenticado
   useEffect(() => {
@@ -214,6 +219,7 @@ export default function App() {
           <BusinessProvider>
             <AuthProvider>
               <NavigationContainer
+                ref={navigationRef}
                 documentTitle={{
                   formatter: () => "Agenda Flui",
                 }}
