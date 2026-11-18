@@ -68,7 +68,7 @@ const Watermark = ({ styles }) => {
 };
 
 const PerfilScreen = ({ navigation }) => {
-  const { logout: authLogout, isAuthenticated } = useAuth();
+  const { endSession: authLogout, isAuthenticated } = useAuth();
   const { theme, themeMode, changeTheme, reloadLogos } = useTheme();
   const styles = getStyles(theme);
   const [profile, setProfile] = useState(null);

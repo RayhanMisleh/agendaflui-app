@@ -66,9 +66,6 @@ export const AuthProvider = ({ children }) => {
       customer: settled ? session.customer : null,
       startSession,
       endSession,
-      // Nomes antigos que as telas de entrada e o perfil ainda usam até as tarefas 3 e 4.
-      login: () => {},
-      logout: endSession,
     }),
     [settled, session, status, slug, startSession, endSession]
   );

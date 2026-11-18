@@ -23,7 +23,7 @@ import { useTheme } from "../utils/ThemeContext";
 export default function ConfirmarExclusaoCodeScreen({ navigation, route }) {
   // Email vem como parâmetro da tela anterior
   const { userEmail } = route.params;
-  const { logout: authLogout } = useAuth();
+  const { endSession: authLogout } = useAuth();
   const { theme } = useTheme();
   const { isDarkMode } = theme;
   const styles = getStyles(theme, isDarkMode);

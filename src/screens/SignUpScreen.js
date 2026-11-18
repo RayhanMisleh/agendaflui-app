@@ -1,434 +1,150 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Image,
-  ScrollView,
-  Linking,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { signUp } from "../api/authApi";
-import { validateEmail } from "../utils/helpers";
+import React, { useRef, useState } from "react";
+import { Text, StyleSheet } from "react-native";
+import { register } from "../api/auth";
+import { pendingRegistration } from "../auth/pendingRegistration";
+import EntryLayout from "../components/entry/EntryLayout";
+import Field from "../components/entry/Field";
+import FormMessage from "../components/entry/FormMessage";
+import Button from "../components/ui/Button";
+import { validateEmail, validatePassword } from "../utils/helpers";
 import { useTheme } from "../utils/ThemeContext";
-import { config } from "../config";
+import { fonts, type } from "../theme/tokens";
 
 export default function SignUpScreen({ navigation }) {
   const { theme } = useTheme();
-  const { isDarkMode } = theme;
-  const styles = getStyles(theme, isDarkMode);
+  const styles = getStyles(theme);
 
+  const emailRef = useRef(null);
+  const phoneRef = useRef(null);
+  const passwordRef = useRef(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [nameError, setNameError] = useState("");
-  const [emailError, setEmailError] = useState("");
-  const [phoneError, setPhoneError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [confirmPasswordError, setConfirmPasswordError] = useState("");
+  const [errors, setErrors] = useState({});
+  const [failure, setFailure] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const validateForm = () => {
-    let isValid = true;
+  const change = (field, setter) => (text) => {
+    setter(text);
+    if (errors[field]) setErrors({ ...errors, [field]: undefined });
+  };
 
-    // Validar nome
-    if (!name.trim()) {
-      setNameError("Nome é obrigatório");
-      isValid = false;
-    } else if (name.trim().length < 2) {
-      setNameError("Nome deve ter pelo menos 2 caracteres");
-      isValid = false;
-    } else {
-      setNameError("");
-    }
-
-    // Validar email
-    if (!email) {
-      setEmailError("Email é obrigatório");
-      isValid = false;
-    } else if (!validateEmail(email)) {
-      setEmailError("Email inválido");
-      isValid = false;
-    } else {
-      setEmailError("");
-    }
-
-    // Validar telefone (opcional, mas se preenchido, deve ter 10 ou 11 dígitos)
-    if (phone.trim()) {
-      const cleaned = phone.replace(/\D/g, "");
-      if (cleaned.length < 10 || cleaned.length > 11) {
-        setPhoneError("Telefone inválido");
-        isValid = false;
-      } else {
-        setPhoneError("");
-      }
-    } else {
-      setPhoneError("");
-    }
-
-    // Validar senha
-    if (!password) {
-      setPasswordError("Senha é obrigatória");
-      isValid = false;
-    } else if (password.length < 6) {
-      setPasswordError("Senha deve ter pelo menos 6 caracteres");
-      isValid = false;
-    } else {
-      setPasswordError("");
-    }
-
-    // Validar confirmação de senha
-    if (!confirmPassword) {
-      setConfirmPasswordError("Confirmação de senha é obrigatória");
-      isValid = false;
-    } else if (password !== confirmPassword) {
-      setConfirmPasswordError("As senhas são diferentes");
-      isValid = false;
-    } else {
-      setConfirmPasswordError("");
-    }
-
-    return isValid;
+  const goBack = () => {
+    if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate("Login");
   };
 
   const handleSignUp = async () => {
-    if (!validateForm()) {
-      return;
+    if (loading) return;
+    const next = {};
+    if (name.trim().length < 2) next.name = "Digite seu nome.";
+    if (!email.trim()) next.email = "Digite seu e-mail.";
+    else if (!validateEmail(email.trim())) next.email = "Confira o e-mail. Falta algo?";
+    if (phone.trim()) {
+      const digits = phone.replace(/\D/g, "");
+      if (digits.length < 10 || digits.length > 13) next.phone = "Confira o telefone, com DDD.";
     }
+    if (!validatePassword(password)) next.password = "Use de 10 a 200 caracteres na senha.";
+    setErrors(next);
+    setFailure("");
+    if (Object.keys(next).length > 0) return;
 
-    setIsLoading(true);
-
+    setLoading(true);
     try {
-      // Adicionar +55 antes de enviar para o servidor
-      const formattedPhone = phone.trim() ? `+55 ${phone.trim()}` : null;
-      const response = await signUp(name.trim(), email, password, formattedPhone);
-      if (response) {
-        // Navegar para tela de verificação de email
-        navigation.navigate("NewUserEmailCode", { userEmail: email });
-      }
+      await register({ name, email, phone, password });
+      pendingRegistration.set({ name, email, phone, password });
+      setLoading(false);
+      navigation.navigate("NewUserEmailCode", { email: email.trim().toLowerCase() });
     } catch (error) {
-      // O erro já é tratado na função signUp
-    }
-
-    setIsLoading(false);
-  };
-
-  const handleBackToLogin = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate("Login");
+      const fields = error.fields || {};
+      setErrors({ name: fields.name, email: fields.email, phone: fields.phone, password: fields.password });
+      setFailure(Object.keys(fields).length > 0 ? "" : error.message);
+      setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardView}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-      >
-        <ScrollView
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.content}>
-            {/* Header */}
-            <View style={styles.header}>
-              <Image
-                source={require("../../assets/logo-horizontal.png")}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-              <Text style={styles.subtitle}>Crie sua conta</Text>
-            </View>
+    <EntryLayout title="Crie sua conta" hint="Mandamos um código para o seu e-mail confirmar." onBack={goBack}>
+      <Field
+        label="Nome"
+        value={name}
+        onChangeText={change("name", setName)}
+        error={errors.name}
+        placeholder="Como você se chama"
+        autoCapitalize="words"
+        autoComplete="name"
+        textContentType="name"
+        returnKeyType="next"
+        blurOnSubmit={false}
+        onSubmitEditing={() => emailRef.current && emailRef.current.focus()}
+        editable={!loading}
+      />
+      <Field
+        ref={emailRef}
+        label="E-mail"
+        value={email}
+        onChangeText={change("email", setEmail)}
+        error={errors.email}
+        placeholder="voce@exemplo.com"
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="email"
+        textContentType="emailAddress"
+        returnKeyType="next"
+        blurOnSubmit={false}
+        onSubmitEditing={() => phoneRef.current && phoneRef.current.focus()}
+        editable={!loading}
+      />
+      <Field
+        ref={phoneRef}
+        label="Telefone (opcional)"
+        value={phone}
+        onChangeText={change("phone", setPhone)}
+        error={errors.phone}
+        placeholder="(11) 91234-5678"
+        keyboardType="phone-pad"
+        autoComplete="tel"
+        textContentType="telephoneNumber"
+        returnKeyType="next"
+        blurOnSubmit={false}
+        onSubmitEditing={() => passwordRef.current && passwordRef.current.focus()}
+        editable={!loading}
+      />
+      <Field
+        ref={passwordRef}
+        label="Senha"
+        hint="Mínimo de 10 caracteres."
+        value={password}
+        onChangeText={change("password", setPassword)}
+        error={errors.password}
+        secure
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="new-password"
+        textContentType="newPassword"
+        returnKeyType="go"
+        onSubmitEditing={handleSignUp}
+        editable={!loading}
+      />
 
-            {/* Form */}
-            <View style={styles.form}>
-              {/* Name Input */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Nome</Text>
-                <TextInput
-                  style={[styles.input, nameError ? styles.inputError : null]}
-                  placeholder="Digite seu nome completo"
-                  placeholderTextColor={theme.colors.textMuted}
-                  value={name}
-                  onChangeText={(text) => {
-                    setName(text);
-                    if (nameError) setNameError("");
-                  }}
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                />
-                {nameError ? (
-                  <Text style={styles.errorText}>{nameError}</Text>
-                ) : null}
-              </View>
+      <FormMessage kind="error">{failure}</FormMessage>
 
-              {/* Email Input */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Email</Text>
-                <TextInput
-                  style={[styles.input, emailError ? styles.inputError : null]}
-                  placeholder="Digite seu email"
-                  placeholderTextColor={theme.colors.textMuted}
-                  value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    if (emailError) setEmailError("");
-                  }}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                />
-                {emailError ? (
-                  <Text style={styles.errorText}>{emailError}</Text>
-                ) : null}
-              </View>
+      <Button title="Criar conta" onPress={handleSignUp} loading={loading} fullWidth />
 
-              {/* Phone Input */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Telefone</Text>
-                <TextInput
-                  style={[styles.input, phoneError ? styles.inputError : null]}
-                  placeholder="(00) 00000-0000"
-                  placeholderTextColor={theme.colors.textMuted}
-                  value={phone}
-                  onChangeText={(text) => {
-                    let digits = text.replace(/\D/g, "");
-                    if (digits.length === 0) {
-                      setPhone("");
-                      if (phoneError) setPhoneError("");
-                      return;
-                    }
-                    digits = digits.slice(0, 11);
-                    let result = "";
-                    if (digits.length > 0) result += `(${digits.slice(0, 2)}`;
-                    if (digits.length > 2) result += `) ${digits.slice(2, 7)}`;
-                    if (digits.length > 7) result += `-${digits.slice(7, 11)}`;
-                    
-                    setPhone(result);
-                    if (phoneError) setPhoneError("");
-                  }}
-                  keyboardType="phone-pad"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                />
-                {phoneError ? (
-                  <Text style={styles.errorText}>{phoneError}</Text>
-                ) : null}
-              </View>
-
-              {/* Password Input */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Senha</Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    passwordError ? styles.inputError : null,
-                  ]}
-                  placeholder="Digite sua senha"
-                  placeholderTextColor={theme.colors.textMuted}
-                  value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    if (passwordError) setPasswordError("");
-                  }}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                />
-                {passwordError ? (
-                  <Text style={styles.errorText}>{passwordError}</Text>
-                ) : null}
-              </View>
-
-              {/* Confirm Password Input */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Confirmar Senha</Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    confirmPasswordError ? styles.inputError : null,
-                  ]}
-                  placeholder="Confirme sua senha"
-                  placeholderTextColor={theme.colors.textMuted}
-                  value={confirmPassword}
-                  onChangeText={(text) => {
-                    setConfirmPassword(text);
-                    if (confirmPasswordError) setConfirmPasswordError("");
-                  }}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSignUp}
-                />
-                {confirmPasswordError ? (
-                  <Text style={styles.errorText}>{confirmPasswordError}</Text>
-                ) : null}
-              </View>
-
-              {/* SignUp Button */}
-              <TouchableOpacity
-                style={[styles.button, isLoading && styles.buttonDisabled]}
-                onPress={handleSignUp}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text style={styles.buttonText}>Cadastrar</Text>
-                )}
-              </TouchableOpacity>
-
-              {/* Privacy notice (discreet & sophisticated) */}
-              {config.privacyUrl ? (
-                <Text style={styles.privacyText}>
-                  Ao continuar, você concorda com nossa{" "}
-                  <Text
-                    style={styles.privacyLink}
-                    onPress={() => Linking.openURL(config.privacyUrl)}
-                  >
-                    Política de Privacidade
-                  </Text>
-                  .
-                </Text>
-              ) : null}
-            </View>
-
-            {/* Footer */}
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>
-                Já tem uma conta?{" "}
-                <Text style={styles.linkText} onPress={handleBackToLogin}>
-                  Fazer login
-                </Text>
-              </Text>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      <Text style={styles.linkLine}>
+        Já tem conta?{" "}
+        <Text style={styles.link} onPress={() => navigation.navigate("Login")} accessibilityRole="link">
+          Entrar
+        </Text>
+      </Text>
+    </EntryLayout>
   );
 }
 
-const getStyles = (theme, isDarkMode) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: theme.spacing.xl,
-    paddingVertical: theme.spacing.lg,
-  },
-  header: {
-    marginBottom: theme.spacing.xl,
-  },
-  logo: {
-    width: 200,
-    height: 120,
-    alignSelf: "center",
-    marginBottom: theme.spacing.sm,
-  },
-  subtitle: {
-    fontSize: theme.fontSizes.base,
-    color: theme.colors.textMuted,
-    textAlign: "center",
-  },
-  form: {
-    marginBottom: theme.spacing.xl,
-  },
-  inputContainer: {
-    marginBottom: theme.spacing.md,
-  },
-  label: {
-    fontSize: theme.fontSizes.base,
-    color: theme.colors.textPrimary,
-    marginBottom: theme.spacing.sm,
-    fontWeight: "500",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-    color: theme.colors.textPrimary,
-    backgroundColor: theme.colors.backgroundSecondary,
-    fontSize: theme.fontSizes.base,
-  },
-  inputError: {
-    borderColor: theme.colors.error,
-  },
-  errorText: {
-    fontSize: theme.fontSizes.sm,
-    color: theme.colors.error,
-    marginTop: theme.spacing.xs,
-  },
-  button: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.borderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    fontSize: theme.fontSizes.base,
-    color: "#FFFFFF",
-    textAlign: "center",
-    fontWeight: "600",
-  },
-  footer: {
-    marginTop: theme.spacing.xl,
-  },
-  footerText: {
-    fontSize: theme.fontSizes.base,
-    color: theme.colors.textMuted,
-    textAlign: "center",
-  },
-  linkText: {
-    color: theme.colors.primary,
-    fontWeight: "500",
-  },
-  privacyText: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    textAlign: "center",
-    marginTop: theme.spacing.md,
-    lineHeight: 18,
-    opacity: 0.95,
-  },
-  privacyLink: {
-    color: theme.colors.primary,
-    textDecorationLine: "underline",
-    fontWeight: "500",
-  },
-});
+const getStyles = (theme) =>
+  StyleSheet.create({
+    linkLine: { ...type.body, color: theme.colors.inkMuted, textAlign: "center", marginTop: 24 },
+    link: { fontFamily: fonts.textSemi, color: theme.colors.brand },
+  });

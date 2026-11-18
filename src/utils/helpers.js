@@ -4,9 +4,14 @@ export const validateEmail = (email) => {
   return emailRegex.test(email);
 };
 
+// Senha da conta: de 10 a 200 caracteres (o servidor confere de novo).
 export const validatePassword = (password) => {
-  // Mínimo 6 caracteres
-  return password && password.length >= 6;
+  return typeof password === "string" && password.length >= 10 && password.length <= 200;
+};
+
+// Código de verificação: 6 dígitos.
+export const validateCode = (code) => {
+  return typeof code === "string" && /^\d{6}$/.test(code.trim());
 };
 
 // Função para debounce

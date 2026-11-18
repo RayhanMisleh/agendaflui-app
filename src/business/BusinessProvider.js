@@ -7,6 +7,7 @@ import { CartService } from "../services/cartService";
 import { createBusinessStore } from "./businessStore";
 import { decideStoreSwitch, parseStoreLink } from "./storeLink";
 import { leaveBusiness } from "./switching";
+import { termsOf } from "./terms";
 
 const businessStore = createBusinessStore(AsyncStorage);
 
@@ -25,10 +26,10 @@ export function useBusiness() {
   return useContext(BusinessContext);
 }
 
-// Termos da conta (profissional, cliente, pontos, clube). A Tarefa 3 completa com os padrões.
+// Termos da conta (profissional, cliente, pontos, clube), sempre completos.
 export function useTerms() {
   const { business } = useBusiness();
-  return business ? business.terms : undefined;
+  return useMemo(() => termsOf(business), [business]);
 }
 
 function confirmSwitch(newName, currentName) {

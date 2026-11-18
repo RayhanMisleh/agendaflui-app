@@ -1,345 +1,136 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Image,
-  Linking,
-  Keyboard,
-  TouchableWithoutFeedback,
-} from "react-native";
-import MaterialIcons from "react-native-vector-icons/MaterialIcons";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { login } from "../api/authApi";
+import React, { useRef, useState } from "react";
+import { View, Text, Linking, StyleSheet } from "react-native";
+import { login } from "../api/auth";
 import { useAuth } from "../components/AuthProvider";
+import EntryLayout from "../components/entry/EntryLayout";
+import Field from "../components/entry/Field";
+import FormMessage from "../components/entry/FormMessage";
+import Button from "../components/ui/Button";
 import { validateEmail } from "../utils/helpers";
-import { theme, createButtonStyle, createTextStyle } from "../utils/theme";
-import { config } from "../config";
 import { useTheme } from "../utils/ThemeContext";
+import { config } from "../config";
+import { fonts, type } from "../theme/tokens";
 
-export default function LoginScreen({ navigation }) {
-  const { login: authLogin } = useAuth();
+export default function LoginScreen({ navigation, route }) {
   const { theme } = useTheme();
-  const { isDarkMode } = theme;
+  const { startSession } = useAuth();
   const styles = getStyles(theme);
+  const notice = route && route.params ? route.params.notice : null;
+
+  const passwordRef = useRef(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [emailError, setEmailError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
+  const [errors, setErrors] = useState({});
+  const [failure, setFailure] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const validateForm = () => {
-    let isValid = true;
-
-    // Validar email
-    if (!email) {
-      setEmailError("Email é obrigatório");
-      isValid = false;
-    } else if (!validateEmail(email)) {
-      setEmailError("Email inválido");
-      isValid = false;
-    } else {
-      setEmailError("");
-    }
-
-    // Validar senha
-    if (!password) {
-      setPasswordError("Senha é obrigatória");
-      isValid = false;
-    } else if (password.length < 6) {
-      setPasswordError("Senha deve ter pelo menos 6 caracteres");
-      isValid = false;
-    } else {
-      setPasswordError("");
-    }
-
-    return isValid;
+  const goBack = () => {
+    if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate("Navigator");
   };
 
   const handleLogin = async () => {
-    if (!validateForm()) {
-      return;
+    if (loading) return;
+    const next = {};
+    if (!email.trim()) next.email = "Digite seu e-mail.";
+    else if (!validateEmail(email.trim())) next.email = "Confira o e-mail. Falta algo?";
+    if (!password) next.password = "Digite sua senha.";
+    setErrors(next);
+    setFailure("");
+    if (Object.keys(next).length > 0) return;
+
+    setLoading(true);
+    try {
+      const session = await login({ email, password });
+      await startSession(session);
+      navigation.navigate("Navigator");
+    } catch (error) {
+      setFailure(error.message);
+      setLoading(false);
     }
-
-    setIsLoading(true);
-
-    const response = await login(email, password);
-
-    if (response) {
-      // Verificar se precisa de verificação de email
-      if (response.needVerification) {
-        // Redirecionar para tela de verificação
-        navigation.navigate("NewUserEmailCode", {
-          userEmail: response.userEmail || email,
-          fromLogin: true,
-        });
-      } else {
-        // Login bem-sucedido
-        authLogin(); // Atualizar estado de autenticação
-        navigation.navigate("Navigator");
-      }
-    }
-
-    setIsLoading(false);
-  };
-
-  const handleNavigateToSignUp = () => {
-    navigation.navigate("SignUp");
-  };
-
-  const handleNavigateToRecuperarSenha = () => {
-    navigation.navigate("RecuperarSenha");
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.keyboardView}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-        >
-          <View style={styles.content}>
-            {/* ... previous content ... */}
-            <View style={styles.header}>
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => {
-                  if (navigation.canGoBack()) {
-                    navigation.goBack();
-                  } else {
-                    navigation.navigate("Navigator");
-                  }
-                }}
-              >
-                <MaterialIcons name="arrow-back" size={24} color={theme.colors.textPrimary} />
-              </TouchableOpacity>
+    <EntryLayout title="Entre na sua conta" hint="Use o e-mail e a senha do seu cadastro." onBack={goBack}>
+      {notice ? <FormMessage kind="info">{notice}</FormMessage> : null}
 
-              <Image
-                source={require("../../assets/logo-horizontal.png")}
-                style={styles.logo}
-                resizeMode="contain"
-              />
+      <Field
+        label="E-mail"
+        value={email}
+        onChangeText={(text) => {
+          setEmail(text);
+          if (errors.email) setErrors({ ...errors, email: undefined });
+        }}
+        error={errors.email}
+        placeholder="voce@exemplo.com"
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="email"
+        textContentType="emailAddress"
+        returnKeyType="next"
+        blurOnSubmit={false}
+        onSubmitEditing={() => passwordRef.current && passwordRef.current.focus()}
+        editable={!loading}
+      />
+      <Field
+        ref={passwordRef}
+        label="Senha"
+        value={password}
+        onChangeText={(text) => {
+          setPassword(text);
+          if (errors.password) setErrors({ ...errors, password: undefined });
+        }}
+        error={errors.password}
+        secure
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="password"
+        textContentType="password"
+        returnKeyType="go"
+        onSubmitEditing={handleLogin}
+        editable={!loading}
+      />
 
-              <Text style={styles.subtitle}>Faça login para continuar</Text>
-            </View>
+      <FormMessage kind="error">{failure}</FormMessage>
 
-            {/* Form */}
-            <View style={styles.form}>
-              {/* Email Input */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Email</Text>
-                <TextInput
-                  style={[styles.input, emailError ? styles.inputError : null]}
-                  placeholder="Digite seu email"
-                  placeholderTextColor={theme.colors.textMuted}
-                  value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    if (emailError) setEmailError("");
-                  }}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                />
-                {emailError ? (
-                  <Text style={styles.errorText}>{emailError}</Text>
-                ) : null}
-              </View>
+      <Button title="Entrar" onPress={handleLogin} loading={loading} fullWidth />
 
-              {/* Password Input */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Senha</Text>
-                <TextInput
-                  style={[styles.input, passwordError ? styles.inputError : null]}
-                  placeholder="Digite sua senha"
-                  placeholderTextColor={theme.colors.textMuted}
-                  value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    if (passwordError) setPasswordError("");
-                  }}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="done"
-                  onSubmitEditing={handleLogin}
-                />
-                {passwordError ? (
-                  <Text style={styles.errorText}>{passwordError}</Text>
-                ) : null}
-              </View>
+      <View style={styles.links}>
+        <Text style={styles.linkLine}>
+          Esqueceu a senha?{" "}
+          <Text style={styles.link} onPress={() => navigation.navigate("RecuperarSenha")} accessibilityRole="link">
+            Trocar senha
+          </Text>
+        </Text>
+        <Text style={styles.linkLine}>
+          Ainda não tem conta?{" "}
+          <Text style={styles.link} onPress={() => navigation.navigate("SignUp")} accessibilityRole="link">
+            Criar conta
+          </Text>
+        </Text>
+      </View>
 
-              {/* Login Button */}
-              <TouchableOpacity
-                style={[styles.button, isLoading && styles.buttonDisabled]}
-                onPress={handleLogin}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text style={styles.buttonText}>Entrar</Text>
-                )}
-              </TouchableOpacity>
-
-              {/* Privacy notice */}
-              {config.privacyUrl ? (
-                <Text style={styles.privacyText}>
-                  Ao continuar, você concorda com nossa{" "}
-                  <Text
-                    style={styles.privacyLink}
-                    onPress={() => Linking.openURL(config.privacyUrl)}
-                  >
-                    Política de Privacidade
-                  </Text>
-                  .
-                </Text>
-              ) : null}
-            </View>
-
-            {/* Footer */}
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>
-                Esqueceu sua senha?{" "}
-                <Text
-                  style={styles.linkText}
-                  onPress={handleNavigateToRecuperarSenha}
-                >
-                  Recuperar senha
-                </Text>
-              </Text>
-              <Text style={[styles.footerText, { marginTop: theme.spacing.md }]}>
-                Não tem uma conta?{" "}
-                <Text style={styles.linkText} onPress={handleNavigateToSignUp}>
-                  Cadastrar-se
-                </Text>
-              </Text>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </TouchableWithoutFeedback>
-    </SafeAreaView>
+      <Text style={styles.legal}>
+        Ao continuar, você aceita os{" "}
+        <Text style={styles.legalLink} onPress={() => Linking.openURL(config.termsUrl).catch(() => {})}>
+          Termos de uso
+        </Text>{" "}
+        e a{" "}
+        <Text style={styles.legalLink} onPress={() => Linking.openURL(config.privacyUrl).catch(() => {})}>
+          Política de privacidade
+        </Text>
+        .
+      </Text>
+    </EntryLayout>
   );
 }
 
-const getStyles = (theme) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: theme.spacing.xl,
-  },
-  header: {
-    marginBottom: theme.spacing.xl,
-  },
-  logo: {
-    width: 200,
-    height: 120,
-    alignSelf: "center",
-    marginBottom: theme.spacing.sm,
-  },
-  title: {
-    fontSize: theme.fontSizes.xl,
-    color: theme.colors.textPrimary,
-    fontWeight: "800",
-    textAlign: "center",
-    marginBottom: theme.spacing.sm,
-  },
-  subtitle: {
-    fontSize: theme.fontSizes.base,
-    color: theme.colors.textMuted,
-    textAlign: "center",
-  },
-  form: {
-    marginBottom: theme.spacing.xl,
-  },
-  inputContainer: {
-    marginBottom: theme.spacing.md,
-  },
-  label: {
-    fontSize: theme.fontSizes.base,
-    color: theme.colors.textPrimary,
-    marginBottom: theme.spacing.sm,
-    fontWeight: "500",
-  },
-  backButton: {
-    position: "absolute",
-    left: theme.spacing.xl,
-    top: 0,
-    padding: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-    color: theme.colors.textPrimary,
-    fontSize: theme.fontSizes.base,
-    backgroundColor: theme.colors.backgroundSecondary,
-  },
-  inputError: {
-    borderColor: theme.colors.error,
-  },
-  errorText: {
-    fontSize: theme.fontSizes.sm,
-    color: theme.colors.error,
-    marginTop: theme.spacing.xs,
-  },
-  button: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.borderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    fontSize: theme.fontSizes.base,
-    color: "#FFFFFF",
-    textAlign: "center",
-    fontWeight: "600",
-  },
-  footer: {
-    marginTop: theme.spacing.xl,
-  },
-  footerText: {
-    fontSize: theme.fontSizes.base,
-    color: theme.colors.textMuted,
-    textAlign: "center",
-  },
-  linkText: {
-    color: theme.colors.primary,
-    fontWeight: "500",
-  },
-  privacyText: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    textAlign: "center",
-    marginTop: theme.spacing.md,
-    lineHeight: 18,
-    opacity: 0.95,
-  },
-  privacyLink: {
-    color: theme.colors.primary,
-    textDecorationLine: "underline",
-    fontWeight: "500",
-  },
-});
+const getStyles = (theme) =>
+  StyleSheet.create({
+    links: { marginTop: 24, gap: 12 },
+    linkLine: { ...type.body, color: theme.colors.inkMuted, textAlign: "center" },
+    link: { fontFamily: fonts.textSemi, color: theme.colors.brand },
+    legal: { ...type.caption, color: theme.colors.inkMuted, textAlign: "center", marginTop: 24 },
+    legalLink: { color: theme.colors.brand, textDecorationLine: "underline" },
+  });

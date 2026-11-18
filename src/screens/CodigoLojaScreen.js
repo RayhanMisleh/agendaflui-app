@@ -49,35 +49,37 @@ export default function CodigoLojaScreen() {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.content}>
-          <Image
-            source={theme.isDarkMode ? require("../../assets/logo-horizontal-negativo.png") : require("../../assets/logo-horizontal.png")}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.title}>Qual é a sua loja?</Text>
-          <Text style={styles.hint}>O código está no link que a loja mandou para você.</Text>
+          <View style={styles.block}>
+            <Image
+              source={theme.isDarkMode ? require("../../assets/logo-horizontal-negativo.png") : require("../../assets/logo-horizontal.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.title}>Qual é a sua loja?</Text>
+            <Text style={styles.hint}>O código vem no link que a loja mandou para você.</Text>
 
-          <Text style={styles.label}>Código da loja</Text>
-          <TextInput
-            style={[styles.input, error ? styles.inputError : null]}
-            value={code}
-            onChangeText={(text) => {
-              setCode(text);
-              if (error) setError("");
-            }}
-            placeholder="patas-e-pelos"
-            placeholderTextColor={theme.colors.inkMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="off"
-            returnKeyType="go"
-            onSubmitEditing={handleContinue}
-            editable={!loading}
-            accessibilityLabel="Código da loja"
-          />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+            <Text style={styles.label}>Código da loja</Text>
+            <TextInput
+              style={[styles.input, error ? styles.inputError : null]}
+              value={code}
+              onChangeText={(text) => {
+                setCode(text);
+                if (error) setError("");
+              }}
+              placeholder="patas-e-pelos"
+              placeholderTextColor={theme.colors.inkMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
+              returnKeyType="go"
+              onSubmitEditing={handleContinue}
+              editable={!loading}
+              accessibilityLabel="Código da loja"
+            />
+            {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Button title="Continuar" onPress={handleContinue} loading={loading} fullWidth style={styles.button} />
+            <Button title="Continuar" onPress={handleContinue} loading={loading} fullWidth style={styles.button} />
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -88,8 +90,9 @@ const getStyles = (theme) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.ground },
     scroll: { flexGrow: 1, justifyContent: "center", padding: 24 },
-    content: { width: "100%", maxWidth: 420, alignSelf: "center" },
-    logo: { width: 200, height: 43, alignSelf: "flex-start", marginBottom: 40 },
+    content: { width: "100%", maxWidth: 440, alignSelf: "center" },
+    block: { padding: 28, borderRadius: radius.xl, backgroundColor: theme.colors.brandTint },
+    logo: { width: 200, height: 43, alignSelf: "flex-start", marginBottom: 32 },
     title: { ...type.title, color: theme.colors.ink, marginBottom: 8 },
     hint: { ...type.body, color: theme.colors.inkMuted, marginBottom: 32 },
     label: { ...type.small, fontFamily: fonts.textSemi, color: theme.colors.ink, marginBottom: 8 },

@@ -1,461 +1,124 @@
-import React, { useState, useRef } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Image,
-  ScrollView,
-  Alert,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import MaterialIcons from "react-native-vector-icons/MaterialIcons";
-import { verifyEmail, resendVerificationCode } from "../api/authApi";
+import React, { useRef, useState } from "react";
+import { Text, StyleSheet } from "react-native";
+import { verify, register } from "../api/auth";
+import { pendingRegistration } from "../auth/pendingRegistration";
 import { useAuth } from "../components/AuthProvider";
-import { createButtonStyle, createTextStyle } from "../utils/theme";
+import EntryLayout from "../components/entry/EntryLayout";
+import Field from "../components/entry/Field";
+import FormMessage from "../components/entry/FormMessage";
+import Button from "../components/ui/Button";
+import { validateCode } from "../utils/helpers";
 import { useTheme } from "../utils/ThemeContext";
+import { fonts, type } from "../theme/tokens";
 
 export default function NewUserEmailCodeScreen({ navigation, route }) {
-  // Email vem como parâmetro da tela anterior
-  const { userEmail, fromLogin = false } = route.params;
-  const { login: authLogin } = useAuth();
+  const email = route && route.params && route.params.email ? route.params.email : "";
   const { theme } = useTheme();
-  const { isDarkMode } = theme;
-  const styles = getStyles(theme, isDarkMode);
+  const { startSession } = useAuth();
+  const styles = getStyles(theme);
 
+  const sending = useRef(false);
   const [code, setCode] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isResending, setIsResending] = useState(false);
-  const [codeError, setCodeError] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
 
-  // Ref para focar no input
-  const codeInputRef = useRef(null);
-
-  const validateCode = (codeToValidate = code) => {
-    const cleanCode = codeToValidate.trim();
-
-    if (!cleanCode) {
-      setCodeError("Código é obrigatório");
-      return false;
-    }
-
-    if (cleanCode.length !== 6) {
-      setCodeError("Código deve ter 6 dígitos");
-      return false;
-    }
-
-    if (!/^\d{6}$/.test(cleanCode)) {
-      setCodeError("Código deve conter apenas números");
-      return false;
-    }
-
-    setCodeError("");
-    return true;
+  const goBack = () => {
+    if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate("SignUp");
   };
 
-  const handleVerifyCode = async (codeToVerify = code) => {
-    if (!validateCode(codeToVerify)) {
+  const submit = async (value) => {
+    if (sending.current) return;
+    if (!validateCode(value)) {
+      setError("Digite os 6 números do código.");
       return;
     }
-
-    setIsLoading(true);
-
+    sending.current = true;
+    setLoading(true);
+    setError("");
+    setNotice("");
     try {
-      const response = await verifyEmail(userEmail, codeToVerify.trim());
-      if (response) {
-        authLogin();
-        if (Platform.OS === 'web') {
-          alert("Email verificado com sucesso! Bem-vindo!");
-          navigation.navigate("Navigator");
-        } else {
-          Alert.alert(
-            "Email verificado!",
-            "Sua conta foi verificada com sucesso. Bem-vindo!",
-            [
-              {
-                text: "OK",
-                onPress: () => navigation.navigate("Navigator"),
-              },
-            ]
-          );
-        }
-      }
-    } catch (error) {
+      const session = await verify({ email, code: value });
+      pendingRegistration.clear();
+      await startSession(session);
+      navigation.navigate("Navigator");
+    } catch (failure) {
+      setError(failure.message);
     }
-
-    setIsLoading(false);
+    sending.current = false;
+    setLoading(false);
   };
 
-  const handleResendCode = async () => {
-    setIsResending(true);
+  const handleChange = (text) => {
+    const digits = text.replace(/\D/g, "").slice(0, 6);
+    setCode(digits);
+    if (error) setError("");
+    if (digits.length === 6) submit(digits);
+  };
 
+  // A v1 não tem rota de reenvio: pedir de novo é repetir o cadastro com os mesmos dados.
+  const handleResend = async () => {
+    if (resending || loading) return;
+    const pending = pendingRegistration.get(email);
+    if (!pending) {
+      navigation.navigate("SignUp");
+      return;
+    }
+    setResending(true);
+    setError("");
+    setNotice("");
     try {
-      const response = await resendVerificationCode(userEmail);
-      if (response) {
-        Alert.alert(
-          "Código reenviado",
-          "Um novo código de verificação foi enviado para seu email."
-        );
-        setCode(""); // Limpar o código atual
-        setCodeError("");
-      }
-    } catch (error) {
+      await register(pending);
+      setCode("");
+      setNotice("Mandamos um novo código para o seu e-mail.");
+    } catch (failure) {
+      setError(failure.message);
     }
-
-    setIsResending(false);
-  };
-
-  const handleBackToSignUp = () => {
-    if (fromLogin) {
-      navigation.navigate("Login");
-    } else {
-      if (navigation.canGoBack()) {
-        navigation.goBack();
-      } else {
-        navigation.navigate("SignUp");
-      }
-    }
-  };
-
-  const formatCode = (text) => {
-    // Remove tudo que não é dígito e limita a 6 caracteres
-    const numbers = text.replace(/\D/g, "").slice(0, 6);
-    setCode(numbers);
-    if (codeError) setCodeError("");
-
-    // Auto submit quando tiver 6 dígitos
-    if (numbers.length === 6) {
-      // Pequeno delay para melhor UX e passar o código diretamente
-      setTimeout(() => {
-        handleVerifyCode(numbers);
-      }, 300);
-    }
+    setResending(false);
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardView}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-      >
-        <ScrollView
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          <View style={styles.content}>
-            {/* Header */}
-            <View style={styles.header}>
-              <Image
-                source={require("../../assets/logo-horizontal.png")}
-                style={styles.logo}
-                resizeMode="contain"
-              />
+    <EntryLayout title="Confirme seu e-mail" hint={`Digite o código de 6 números que enviamos para ${email}.`} onBack={goBack}>
+      {notice ? <FormMessage kind="info">{notice}</FormMessage> : null}
 
-              <Text style={styles.title}>Verificar Email</Text>
-              <Text style={styles.subtitle}>
-                {fromLogin
-                  ? "Sua conta precisa ser verificada. Enviamos um código de 6 dígitos para:"
-                  : "Enviamos um código de 6 dígitos para:"}
-              </Text>
-              <Text style={styles.emailText}>{userEmail}</Text>
-            </View>
+      <Field
+        label="Código"
+        value={code}
+        onChangeText={handleChange}
+        error={error}
+        placeholder="000000"
+        keyboardType="number-pad"
+        autoComplete="one-time-code"
+        textContentType="oneTimeCode"
+        maxLength={6}
+        autoFocus
+        editable={!loading}
+        returnKeyType="go"
+        onSubmitEditing={() => submit(code)}
+      />
 
-            {/* Back Button */}
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={handleBackToSignUp}
-            >
-              <MaterialIcons
-                name="arrow-back"
-                size={24}
-                color={theme.colors.textPrimary}
-              />
-            </TouchableOpacity>
+      <Button title="Confirmar" onPress={() => submit(code)} loading={loading} fullWidth />
 
-            {/* Ícone de Email */}
-            <View style={styles.iconContainer}>
-              <MaterialIcons
-                name="mark-email-read"
-                size={64}
-                color={theme.colors.primary}
-              />
-            </View>
-
-            {/* Form */}
-            <View style={styles.form}>
-              {/* Code Input */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Código de Verificação</Text>
-
-                {/* Visual Code Display */}
-                <TouchableOpacity
-                  style={styles.codeDisplayContainer}
-                  onPress={() => codeInputRef.current?.focus()}
-                  activeOpacity={0.7}
-                >
-                  {[0, 1, 2, 3, 4, 5].map((index) => (
-                    <View
-                      key={index}
-                      style={[
-                        styles.codeDigitBox,
-                        code.length > index && styles.codeDigitBoxFilled,
-                        code.length === index && styles.codeDigitBoxActive,
-                        codeError && styles.codeDigitBoxError,
-                      ]}
-                    >
-                      <Text style={styles.codeDigitText}>
-                        {code[index] || ""}
-                      </Text>
-                    </View>
-                  ))}
-                </TouchableOpacity>
-
-                {/* Hidden Input */}
-                <TextInput
-                  ref={codeInputRef}
-                  style={styles.hiddenInput}
-                  value={code}
-                  onChangeText={formatCode}
-                  keyboardType="numeric"
-                  maxLength={6}
-                  autoFocus={true}
-                  returnKeyType="done"
-                  onSubmitEditing={handleVerifyCode}
-                />
-
-                {codeError ? (
-                  <Text style={styles.errorText}>{codeError}</Text>
-                ) : null}
-
-                <Text style={styles.codeHint}>
-                  Digite o código de 6 dígitos que enviamos para seu email
-                </Text>
-              </View>
-
-              {/* Verify Button */}
-              <TouchableOpacity
-                style={[styles.button, isLoading && styles.buttonDisabled]}
-                onPress={handleVerifyCode}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text style={styles.buttonText}>Verificar Código</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {/* Resend Section */}
-            <View style={styles.resendSection}>
-              <Text style={styles.resendText}>Não recebeu o código?</Text>
-              <TouchableOpacity
-                style={styles.resendButton}
-                onPress={handleResendCode}
-                disabled={isResending}
-              >
-                {isResending ? (
-                  <View style={styles.resendingContainer}>
-                    <ActivityIndicator
-                      size="small"
-                      color={theme.colors.primary}
-                    />
-                    <Text style={styles.resendingText}>Reenviando...</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.resendButtonText}>Reenviar código</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {/* Footer */}
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>
-                Problemas com a verificação?{" "}
-                <Text style={styles.linkText} onPress={handleBackToSignUp}>
-                  {fromLogin ? "Voltar ao login" : "Voltar ao cadastro"}
-                </Text>
-              </Text>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      <Text style={styles.linkLine}>
+        Não chegou?{" "}
+        <Text style={styles.link} onPress={handleResend} accessibilityRole="link">
+          {resending ? "Enviando..." : "Reenviar código"}
+        </Text>
+      </Text>
+      <Text style={styles.linkLine}>
+        E-mail errado?{" "}
+        <Text style={styles.link} onPress={goBack} accessibilityRole="link">
+          Voltar ao cadastro
+        </Text>
+      </Text>
+    </EntryLayout>
   );
 }
 
-const getStyles = (theme, isDarkMode) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  content: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: theme.spacing.xl,
-    paddingVertical: theme.spacing.lg,
-  },
-  header: {
-    marginBottom: theme.spacing.xl,
-    alignItems: "center",
-  },
-  backButton: {
-    position: "absolute",
-    top: -theme.spacing.lg,
-    left: -theme.spacing.md,
-    padding: theme.spacing.sm,
-    zIndex: 1,
-  },
-  logo: {
-    width: 150,
-    height: 90,
-    marginBottom: theme.spacing.md,
-  },
-  title: {
-    ...createTextStyle("h2", "textPrimary", theme),
-    textAlign: "center",
-    marginBottom: theme.spacing.sm,
-  },
-  subtitle: {
-    ...createTextStyle("body", "textMuted", theme),
-    textAlign: "center",
-    marginBottom: theme.spacing.xs,
-  },
-  emailText: {
-    ...createTextStyle("body", "primary", theme),
-    textAlign: "center",
-    fontWeight: "600",
-  },
-  iconContainer: {
-    alignItems: "center",
-    marginBottom: theme.spacing.xl,
-  },
-  form: {
-    marginBottom: theme.spacing.xl,
-  },
-  inputContainer: {
-    marginBottom: theme.spacing.md,
-    alignItems: "center",
-  },
-  label: {
-    ...createTextStyle("body", "textPrimary", theme),
-    marginBottom: theme.spacing.md,
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  codeDisplayContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-  },
-  codeDigitBox: {
-    width: 45,
-    height: 55,
-    borderWidth: 2,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: theme.colors.card,
-  },
-  codeDigitBoxFilled: {
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.primaryForeground,
-  },
-  codeDigitBoxActive: {
-    borderColor: theme.colors.primary,
-    borderWidth: 3,
-  },
-  codeDigitBoxError: {
-    borderColor: theme.colors.destructive,
-  },
-  codeDigitText: {
-    ...createTextStyle("h2", "textPrimary", theme),
-    fontWeight: "600",
-  },
-  hiddenInput: {
-    position: "absolute",
-    opacity: 0,
-    width: 1,
-    height: 1,
-  },
-  inputError: {
-    borderColor: theme.colors.destructive,
-  },
-  errorText: {
-    ...createTextStyle("small", "destructive", theme),
-    marginTop: theme.spacing.sm,
-    textAlign: "center",
-  },
-  codeHint: {
-    ...createTextStyle("caption", "textMuted", theme),
-    marginTop: theme.spacing.md,
-    textAlign: "center",
-    paddingHorizontal: theme.spacing.md,
-  },
-  button: {
-    ...createButtonStyle("primary", "md", theme),
-    marginTop: theme.spacing.xl,
-    paddingVertical: theme.spacing.lg,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    ...createTextStyle("body", "white", theme),
-    textAlign: "center",
-    fontWeight: "600",
-  },
-  resendSection: {
-    alignItems: "center",
-    marginBottom: theme.spacing.xl,
-  },
-  resendText: {
-    ...createTextStyle("body", "textMuted", theme),
-    marginBottom: theme.spacing.sm,
-  },
-  resendButton: {
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
-  },
-  resendingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  resendingText: {
-    ...createTextStyle("body", "textMuted", theme),
-    marginLeft: theme.spacing.sm,
-  },
-  resendButtonText: {
-    ...createTextStyle("body", "primary", theme),
-    fontWeight: "600",
-    textDecorationLine: "underline",
-  },
-  footer: {
-    marginTop: theme.spacing.xl,
-  },
-  footerText: {
-    ...createTextStyle("caption", "textMuted", theme),
-    textAlign: "center",
-  },
-  linkText: {
-    color: theme.colors.primary,
-    fontWeight: "500",
-  },
-});
+const getStyles = (theme) =>
+  StyleSheet.create({
+    linkLine: { ...type.body, color: theme.colors.inkMuted, textAlign: "center", marginTop: 20 },
+    link: { fontFamily: fonts.textSemi, color: theme.colors.brand },
+  });
