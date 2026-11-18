@@ -2,13 +2,13 @@
 
 ## Intenção
 
-O app de cliente da Sans vira o app de cliente do AgendaFlui. As mesmas telas e o mesmo fluxo de hoje (agendar, histórico, perfil, loja, prêmios, vouchers), com a marca Agenda Flui e falando com a API v1 do AgendaFlui (`https://api.agendaflui.com.br`). Cada cliente pertence à loja (conta) pela qual entrou, pelo link dela.
+O app de cliente da Sans vira o app de cliente do AgendaFlui. As mesmas telas e o mesmo fluxo de hoje (agendar, histórico, perfil, loja, prêmios; vouchers saem, ver Não-metas), com a marca Agenda Flui e falando com a API v1 do AgendaFlui (`https://api.agendaflui.com.br`). Cada cliente pertence à loja (conta) pela qual entrou, pelo link dela.
 
 Decisão do dono (2026-11-18): "apenas refaça o branding do app já existente da Sans para a AgendaFlui. Não mude a estrutura de agendamento nem nada, cada login de cliente é associado à loja que ele entrou pelo link". Entre (1) só marca no servidor antigo e (2) marca + ligação na API nova com as mesmas telas, o dono escolheu **(2)**.
 
 ## Metas
 
-- Mesma estrutura de navegação e de telas (abas, pilhas, ordem dos passos do agendamento, histórico, perfil, loja, prêmios, vouchers). Telas grandes podem ser divididas por dentro, sem mudar o que a pessoa vê nem a ordem.
+- Mesma estrutura de navegação e de telas (abas, pilhas, ordem dos passos do agendamento, histórico, perfil, loja, prêmios). Telas grandes podem ser divididas por dentro, sem mudar o que a pessoa vê nem a ordem.
 - Visual da marca Agenda Flui (`../branding/AgendaFlui-Marca/`, tokens em `design-tokens/agenda-flui-tokens.json`; referência de tela na landing `../site/`): Água `#0B6E66`, Caramelo `#F2A93B` (nunca cor de texto), Tinta `#0F2A27`, Bolha `#D7EFEB`, Espuma `#F3F8F6`; Bricolage Grotesque (títulos) + Figtree (texto); cantos 10/16/28/pílula; cartões com borda fina sem sombra; Lucide ou ícones de traço equivalentes; voz curta, verbo na frente, "você".
 - Termos da conta, não termos fixos: o nome dos pontos, do clube, do profissional e do cliente vêm de `GET /v1/business` (nunca "Sans Coins", "Barber", "barbeiro", "Sans Club"). Nome e logo da loja aparecem no topo; a marca Agenda Flui fica na entrada genérica e no "feito com Agenda Flui".
 - Toda requisição pela API v1, com o contrato de `https://api.agendaflui.com.br/v1/openapi.json` (no repositório do painel: `src/server/api/routes-manifest.ts` e o OpenAPI gerado).
@@ -30,6 +30,7 @@ Decisão do dono (2026-11-18): "apenas refaça o branding do app já existente d
 
 ## Não-metas
 
+- Vouchers: o dono pediu (2026-11-18) para remover a funcionalidade e as telas de vouchers do app (`VouchersStack`, `SingleVoucher`, entradas no menu e chamadas de API). O módulo continua existindo no painel e na API, mas o app não o usa.
 - App da equipe (rotas `/v1/staff/*`): fica para depois.
 - Mudar o fluxo, a ordem ou a estrutura das telas; criar telas novas além de "código da loja" e o que a API nova exija sem equivalente (ex.: confirmar troca de loja).
 - Migrar para TypeScript ou para expo-router; trocar a biblioteca de navegação.
