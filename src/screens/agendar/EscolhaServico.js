@@ -5,7 +5,7 @@ import { useTheme } from "../../utils/ThemeContext";
 import { fonts, radius, type } from "../../theme/tokens";
 import { canPickService } from "../../booking/selection";
 import { formatCents, durationLabel } from "../../utils/money";
-import { pointsLabel } from "../../business/terms";
+import { earnLabel } from "../../loyalty/prizes";
 
 // Segundo passo: um serviço só. Serviço só do clube fica visível, mas só sócio escolhe.
 // `locked` (remarcar): mostra só o serviço do agendamento, sem trocar.
@@ -49,8 +49,8 @@ export default function EscolhaServico({ services, selectedId, onSelect, isClubM
                     <Icon name="lock" size={12} color={c.ink} />
                     <Text style={[styles.tagText, { color: c.ink }]}>Só para {terms.club}</Text>
                   </View>
-                ) : isClubMember && service.rewardPoints > 0 ? (
-                  <Text style={[styles.sub, { color: c.brandStrong }]}>Ganha {pointsLabel(service.rewardPoints, terms)}</Text>
+                ) : earnLabel(service, terms) ? (
+                  <Text style={[styles.sub, { color: c.brandStrong }]}>{earnLabel(service, terms)}</Text>
                 ) : null}
               </View>
             </TouchableOpacity>

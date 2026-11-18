@@ -7,9 +7,8 @@ import Skeleton from "../../components/ui/Skeleton";
 import { useTheme } from "../../utils/ThemeContext";
 import { listPrizes, redeemPrize } from "../../api/loyalty";
 import { isModuleDisabled } from "../../api/errors";
-import { createIdempotencyKeys } from "../../api/idempotency";
 import { pointsLabel } from "../../business/terms";
-import { prizeState, missingPoints } from "../../loyalty/prizes";
+import { prizeState, missingPoints, createPrizeRedeemer } from "../../loyalty/prizes";
 import { confirmAction, notify } from "../../utils/dialog";
 import { fonts, radius, type } from "../../theme/tokens";
 
@@ -17,12 +16,14 @@ const { width } = Dimensions.get("window");
 const CARD_WIDTH = Math.min(220, Math.max(176, width * 0.5));
 const CHANGED = ["insufficient_points", "changed"];
 
+// Chave de repetição por intenção de resgate; fora do componente para valer também se a lista for remontada.
+const redeemer = createPrizeRedeemer({ send: redeemPrize });
+
 // Lista de prêmios da loja. `balance` é null para visitante (e enquanto o saldo não chegou).
 // O resgate é por aqui: confirma, manda com a Idempotency-Key do prêmio e abre a tela de sucesso.
 const Premios = ({ navigation, isAuthenticated, balance, terms, reloadKey = 0, onChanged }) => {
   const { theme } = useTheme();
   const c = theme.colors;
-  const keys = useRef(createIdempotencyKeys()).current;
   const inFlight = useRef(false);
   const [prizes, setPrizes] = useState(null); // null: carregando
   const [failed, setFailed] = useState(null);
@@ -55,31 +56,31 @@ const Premios = ({ navigation, isAuthenticated, balance, terms, reloadKey = 0, o
       return;
     }
     if (inFlight.current) return;
+    // A confirmação abre uma intenção de resgate (chave aleatória); desistir a descarta.
+    redeemer.begin(prize);
     const ok = await confirmAction({
       title: "Resgatar prêmio",
       message: `Resgatar ${prize.name} por ${pointsLabel(prize.costPoints, terms)}?`,
       confirmText: "Resgatar",
       cancelText: "Voltar",
     });
-    if (!ok || inFlight.current) return;
+    if (!ok) {
+      redeemer.cancel(prize);
+      return;
+    }
+    if (inFlight.current) return;
 
-    // Outro prêmio ou outro custo é outro pedido: chave nova. A mesma tentativa repete a chave.
-    const signature = `prize:${prize.id}:${prize.costPoints}`;
     inFlight.current = true;
     setRedeeming(prize.id);
     try {
-      const result = await redeemPrize({ prizeId: prize.id, expectedCostPoints: prize.costPoints }, keys.keyFor(signature));
-      keys.done(signature);
+      const result = await redeemer.redeem(prize);
       if (onChanged) onChanged();
       navigation.navigate("RedemptionSuccess", { redemption: result.redemption, balance: result.balance });
     } catch (error) {
+      notify("Não deu para resgatar", error.message);
       if (CHANGED.includes(error.reason)) {
-        keys.done(signature);
-        notify("Não deu para resgatar", error.message);
         if (onChanged) onChanged();
         else load();
-      } else {
-        notify("Não deu para resgatar", error.message);
       }
     } finally {
       inFlight.current = false;
