@@ -96,6 +96,15 @@ describe("businessStore", () => {
     expect(await store.getCached()).toBeNull();
   });
 
+  test("loja guardada com formato inválido é descartada na leitura", async () => {
+    for (const bad of ["../x", "A B", "x".repeat(70), "", "-a"]) {
+      const store = createBusinessStore(memoryStorage({ "agendaflui.business": JSON.stringify({ slug: bad, business: null }) }));
+      expect(await store.getSlug()).toBeNull();
+    }
+    const ok = createBusinessStore(memoryStorage({ "agendaflui.business": JSON.stringify({ slug: "patas-1", business: null }) }));
+    expect(await ok.getSlug()).toBe("patas-1");
+  });
+
   test("clear esquece tudo; JSON estragado vira vazio", async () => {
     const storage = memoryStorage();
     const store = createBusinessStore(storage);

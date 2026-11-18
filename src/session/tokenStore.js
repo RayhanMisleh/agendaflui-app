@@ -46,27 +46,51 @@ export function createTokenStore(storage) {
 }
 
 // Tokens da loja ativa: memória (consulta a cada requisição) e armazenamento seguro (sobrevive ao app fechado).
+// A memória é presa à loja (`get` devolve null se a loja ativa mudou) e à sessão: `generation` muda a cada
+// `set` e `clear`, e `setIf` só grava se a sessão ainda for a de quando a geração foi lida.
 export function createSessionTokens(store, getSlug) {
-  let memory = null;
+  let memory = null; // { slug, tokens }
+  let generation = 0;
+
+  async function persist(tokens) {
+    const slug = getSlug();
+    if (!slug) return;
+    try {
+      await store.save(slug, tokens);
+    } catch (error) {
+      // sem gravar, a sessão vale até o app fechar
+    }
+  }
+
+  async function set(tokens) {
+    const kept = pick(tokens);
+    memory = { slug: getSlug(), tokens: kept };
+    generation += 1;
+    await persist(kept);
+  }
+
   return {
-    get: () => memory,
-    async set(tokens) {
-      memory = pick(tokens);
-      const slug = getSlug();
-      if (!slug) return;
-      try {
-        await store.save(slug, memory);
-      } catch (error) {
-        // sem gravar, a sessão vale até o app fechar
-      }
+    get: () => (memory && memory.slug === getSlug() ? memory.tokens : null),
+    generation: () => generation,
+    set,
+    // Grava só se nada (sair, entrar, trocar de loja) aconteceu desde que `gen` foi lida. Devolve se gravou.
+    async setIf(gen, tokens) {
+      if (gen !== generation) return false;
+      await set(tokens);
+      return true;
     },
     async clear() {
       memory = null;
+      generation += 1;
       await store.clear();
     },
     async load(slug) {
-      memory = await store.load(slug);
-      return memory;
+      const gen = generation;
+      const loaded = await store.load(slug);
+      // Algo mudou a sessão enquanto lia (sair, entrar): o que valia depois vence.
+      if (gen !== generation) return memory && memory.slug === slug ? memory.tokens : null;
+      memory = loaded ? { slug, tokens: loaded } : null;
+      return loaded;
     },
   };
 }

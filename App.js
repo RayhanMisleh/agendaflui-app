@@ -34,6 +34,8 @@ import { registerDevice } from "./src/services/notificationService";
 import { ThemeProvider, useTheme } from "./src/utils/ThemeContext";
 import { ROUTES } from "./src/navigation/routes";
 import { colors, type } from "./src/theme/tokens";
+import { clearLegacyStorage } from "./src/session/legacy";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import Toast from "react-native-toast-message";
 
@@ -183,6 +185,11 @@ const RootNavigator = () => {
 };
 
 export default function App() {
+  // Uma vez na partida: tira do aparelho o que o app anterior deixou no AsyncStorage (token em texto puro, dados do usuário).
+  useEffect(() => {
+    clearLegacyStorage(AsyncStorage);
+  }, []);
+
   const [fontsLoaded] = useFonts({
     BricolageGrotesque_600SemiBold,
     BricolageGrotesque_700Bold,

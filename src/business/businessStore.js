@@ -1,3 +1,5 @@
+import { normalizeSlug } from "./storeLink";
+
 const KEY = "agendaflui.business";
 
 // A loja escolhida e o cache dos dados públicos dela (AsyncStorage: nada aqui é segredo).
@@ -6,7 +8,9 @@ export function createBusinessStore(storage) {
     try {
       const raw = await storage.getItem(KEY);
       const saved = raw ? JSON.parse(raw) : null;
-      if (saved && typeof saved.slug === "string") return { slug: saved.slug, business: saved.business || null };
+      // O slug guardado volta revalidado: o que não tem o formato de código de loja é descartado.
+      const slug = saved ? normalizeSlug(saved.slug) : null;
+      if (slug && slug === saved.slug) return { slug, business: saved.business || null };
     } catch (error) {
       // JSON estragado: tratado como vazio
     }

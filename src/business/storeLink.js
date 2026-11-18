@@ -31,3 +31,16 @@ export function decideStoreSwitch(currentSlug, incomingSlug) {
   if (!currentSlug) return "select";
   return currentSlug === incomingSlug ? "none" : "confirm";
 }
+
+// Web: depois de usar o `/<código>` do endereço, tira-o da barra (sem recarregar), para o link não ser lido de
+// novo a cada recarga. Endereço de pedido (`/<código>/pedidos/<id>`) fica: quem o usa ainda precisa dele.
+export function stripStoreFromAddress(win) {
+  try {
+    if (!win || !win.location || !win.history || typeof win.history.replaceState !== "function") return;
+    const link = parseStoreLink(win.location.pathname);
+    if (!link || link.orderId !== null) return;
+    win.history.replaceState(null, "", `/${win.location.search || ""}${win.location.hash || ""}`);
+  } catch (error) {
+    // sem history: o link só será lido de novo no próximo carregamento
+  }
+}

@@ -117,3 +117,65 @@ describe("sessionTokens (memória + tokenStore)", () => {
     expect(tokens.get()).toEqual(T);
   });
 });
+
+describe("createSessionTokens: sessão e loja", () => {
+  test("generation muda a cada set e clear", async () => {
+    const state = { slug: "patas" };
+    const tokens = createSessionTokens(createTokenStore(memoryStorage()), () => state.slug);
+    const g0 = tokens.generation();
+    await tokens.set(T);
+    const g1 = tokens.generation();
+    await tokens.clear();
+    expect(g1).not.toBe(g0);
+    expect(tokens.generation()).not.toBe(g1);
+  });
+
+  test("setIf só grava se a sessão for a mesma de quando a geração foi lida", async () => {
+    const state = { slug: "patas" };
+    const storage = memoryStorage();
+    const tokens = createSessionTokens(createTokenStore(storage), () => state.slug);
+    await tokens.set(T);
+    const gen = tokens.generation();
+    await tokens.clear();
+    expect(await tokens.setIf(gen, { ...T, accessToken: "novo" })).toBe(false);
+    expect(tokens.get()).toBeNull();
+    expect(storage.dump()).toEqual({});
+
+    await tokens.set(T);
+    const gen2 = tokens.generation();
+    expect(await tokens.setIf(gen2, { ...T, accessToken: "novo" })).toBe(true);
+    expect(tokens.get().accessToken).toBe("novo");
+  });
+
+  test("get devolve null quando a memória é de outra loja", async () => {
+    const state = { slug: "patas" };
+    const tokens = createSessionTokens(createTokenStore(memoryStorage()), () => state.slug);
+    await tokens.set(T);
+    state.slug = "outra";
+    expect(tokens.get()).toBeNull();
+  });
+
+  test("load atrasado de uma loja que já não é a ativa não passa a valer", async () => {
+    const state = { slug: "patas" };
+    const storage = memoryStorage();
+    const store = createTokenStore(storage);
+    const tokens = createSessionTokens(store, () => state.slug);
+    await store.save("patas", T);
+    const loading = tokens.load("patas");
+    state.slug = "outra";
+    await loading;
+    expect(tokens.get()).toBeNull();
+  });
+
+  test("load atrasado não sobrescreve um clear que aconteceu enquanto lia", async () => {
+    const state = { slug: "patas" };
+    const storage = memoryStorage();
+    const store = createTokenStore(storage);
+    const tokens = createSessionTokens(store, () => state.slug);
+    await store.save("patas", T);
+    const loading = tokens.load("patas");
+    await tokens.clear();
+    await loading;
+    expect(tokens.get()).toBeNull();
+  });
+});

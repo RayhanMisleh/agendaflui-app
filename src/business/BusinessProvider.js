@@ -6,7 +6,7 @@ import { fetchBusiness } from "../api/business";
 import { CartService } from "../services/cartService";
 import { unregisterDevice } from "../services/notificationService";
 import { createBusinessStore } from "./businessStore";
-import { decideStoreSwitch, parseStoreLink } from "./storeLink";
+import { decideStoreSwitch, parseStoreLink, stripStoreFromAddress } from "./storeLink";
 import { leaveBusiness } from "./switching";
 import { termsOf } from "./terms";
 
@@ -155,6 +155,8 @@ export function BusinessProvider({ children }) {
       }
       const link = parseStoreLink(url);
       if (link) await handleIncoming(link.slug);
+      // Web: o `/<código>` já foi usado (ou recusado); sai da barra para não valer de novo a cada recarga.
+      if (Platform.OS === "web" && typeof window !== "undefined") stripStoreFromAddress(window);
       if (!cancelled && !current.current.slug) apply({ status: "none", slug: null, business: null });
     })();
     return () => {

@@ -23,7 +23,7 @@ const errorBody = (code, reason, message = "Mensagem do servidor.") => ({ error:
 const refreshCalls = (adapter) => adapter.calls.filter((c) => c.url === "/auth/customer/refresh");
 
 // Monta o cliente com armazenamento em memória e adaptador falso. `state.slug` muda a loja ativa.
-async function setup(handler, { slug = "patas", withTokens = true } = {}) {
+async function setup(handler, { slug = "patas", withTokens = true, appKey = "chave-de-teste" } = {}) {
   const storage = memoryStorage();
   const store = createTokenStore(storage);
   const state = { slug };
@@ -34,7 +34,7 @@ async function setup(handler, { slug = "patas", withTokens = true } = {}) {
   const onBusinessGone = jest.fn();
   const client = createApiClient({
     baseURL: "https://api.test/v1",
-    appKey: "chave-de-teste",
+    appKey,
     getSlug: () => state.slug,
     tokens,
     onSessionEnded,
@@ -94,6 +94,31 @@ describe("cabeçalhos", () => {
     await http.get("/business", { headers: { "X-Business": "outra" } });
     expect(adapter.calls[0].headers["x-business"]).toBe("outra");
     expect(adapter.calls[0].headers.authorization).toBeUndefined();
+  });
+});
+
+describe("chave do app e URL", () => {
+  test("sem chave do app a requisição rejeita com mensagem clara e não vai à rede", async () => {
+    const { http, adapter } = await setup(async () => ({ status: 200, data: {} }), { appKey: "" });
+    const failure = await http.get("/professionals").catch((e) => e);
+    expect(failure).toBeInstanceOf(ApiError);
+    expect(failure.code).toBe("app_key_missing");
+    expect(failure.message).toBe("App sem chave de acesso. Avise o suporte.");
+    expect(adapter.calls).toHaveLength(0);
+  });
+
+  test("URL absoluta (outro host) nunca recebe a chave nem o token", async () => {
+    const { http, adapter } = await setup(async () => ({ status: 200, data: {} }));
+    for (const url of ["https://evil.test/x", "http://evil.test/x", "//evil.test/x"]) {
+      await expect(http.get(url)).rejects.toBeInstanceOf(ApiError);
+    }
+    expect(adapter.calls).toHaveLength(0);
+  });
+
+  test("caminho relativo segue normal", async () => {
+    const { http, adapter } = await setup(async () => ({ status: 200, data: {} }));
+    await http.get("/professionals");
+    expect(adapter.calls).toHaveLength(1);
   });
 });
 
@@ -176,8 +201,8 @@ describe("renovação do token", () => {
     expect(onSessionEnded).not.toHaveBeenCalled();
   });
 
-  test("erro do servidor (5xx) ou limite (429) na renovação não derruba a sessão", async () => {
-    for (const status of [500, 503, 429]) {
+  test("erro do servidor (5xx), limite (429) ou tempo esgotado (408) na renovação não derruba a sessão", async () => {
+    for (const status of [500, 503, 429, 408]) {
       const { http, tokens, onSessionEnded } = await setup(
         meHandler({ refreshResult: () => ({ status, data: errorBody("internal", undefined, "Tente depois.") }) })
       );
@@ -224,24 +249,146 @@ describe("renovação do token", () => {
     expect(refreshCalls(adapter)).toHaveLength(1);
   });
 
-  test("troca de loja no meio da renovação: o par novo não é gravado e nada vaza para a outra loja", async () => {
-    const holder = {};
-    const { http, adapter, tokens, storage, state, onSessionEnded } = await setup(async (call) => {
+  // Segura a renovação até `release()`; a requisição original já recebeu 401 e espera por ela.
+  function heldRefresh() {
+    const gate = {};
+    gate.opened = new Promise((resolve) => {
+      gate.release = resolve;
+    });
+    gate.started = new Promise((resolve) => {
+      gate.onStart = resolve;
+    });
+    gate.handler = async (call) => {
       if (call.url === "/auth/customer/refresh") {
-        await holder.switchStore();
+        gate.onStart();
+        await gate.opened;
         return { status: 200, data: { tokens: T2 } };
       }
       return { status: 401, data: errorBody("unauthorized", "session_invalid") };
-    });
-    holder.switchStore = async () => {
-      state.slug = "outra";
-      await tokens.clear();
     };
-    await expect(http.get("/me")).rejects.toBeInstanceOf(ApiError);
+    return gate;
+  }
+
+  test("troca de loja na ordem real (limpa os tokens, depois muda o slug) no meio da renovação: o par da loja A não é gravado nem enviado à loja B", async () => {
+    const gate = heldRefresh();
+    const { http, adapter, tokens, storage, state, onSessionEnded } = await setup(gate.handler);
+    const pending = http.get("/me").catch((e) => e);
+    await gate.started;
+
+    // como BusinessProvider: leave() limpa os tokens, e só depois apply() muda o slug ativo
+    await tokens.clear();
+    await wait(5);
+    state.slug = "outra";
+    gate.release();
+
+    expect(await pending).toBeInstanceOf(ApiError);
     expect(tokens.get()).toBeNull();
     expect(storage.dump()).toEqual({});
     expect(adapter.calls.filter((c) => c.url === "/me")).toHaveLength(1);
+
+    // nenhuma requisição seguinte leva token da loja A com X-Business da loja B
+    await http.get("/business").catch(() => {});
+    for (const call of adapter.calls) {
+      if (call.headers["x-business"] === "outra") expect(call.headers.authorization).toBeUndefined();
+    }
     expect(onSessionEnded).not.toHaveBeenCalled();
+  });
+
+  test("slug que muda depois de o par ser gravado: a memória da loja anterior não vale na nova", async () => {
+    const { tokens, state } = await setup(async () => ({ status: 200, data: {} }));
+    expect(tokens.get()).toEqual(T1);
+    state.slug = "outra";
+    expect(tokens.get()).toBeNull();
+    state.slug = "patas";
+    expect(tokens.get()).toEqual(T1);
+  });
+
+  test("sair no meio da renovação: o par novo não volta para a sessão encerrada", async () => {
+    const gate = heldRefresh();
+    const { http, adapter, tokens, storage, onSessionEnded } = await setup(gate.handler);
+    const pending = http.get("/me").catch((e) => e);
+    await gate.started;
+
+    await tokens.clear(); // endSession: mesma loja, tokens apagados
+    gate.release();
+
+    const failure = await pending;
+    expect(failure).toBeInstanceOf(ApiError);
+    expect(failure.message).toBe(SESSION_ENDED);
+    expect(tokens.get()).toBeNull();
+    expect(storage.dump()).toEqual({});
+    expect(adapter.calls.filter((c) => c.url === "/me")).toHaveLength(1);
+
+    await http.get("/professionals").catch(() => {});
+    expect(adapter.calls.at(-1).headers.authorization).toBeUndefined();
+    expect(onSessionEnded).not.toHaveBeenCalled();
+  });
+
+  test("sair e entrar de novo no meio da renovação: o par novo da entrada não é sobrescrito", async () => {
+    const gate = heldRefresh();
+    const { http, tokens } = await setup(gate.handler);
+    const pending = http.get("/me").catch((e) => e);
+    await gate.started;
+
+    await tokens.clear();
+    await tokens.set({ ...T1, accessToken: "acc-login", refreshToken: "ref-login" });
+    gate.release();
+
+    expect(await pending).toBeInstanceOf(ApiError);
+    expect(tokens.get().accessToken).toBe("acc-login");
+  });
+
+  test("renovação recusada depois de sair e entrar de novo não apaga a sessão nova", async () => {
+    const gate = {};
+    gate.opened = new Promise((resolve) => {
+      gate.release = resolve;
+    });
+    gate.started = new Promise((resolve) => {
+      gate.onStart = resolve;
+    });
+    const { http, tokens, onSessionEnded } = await setup(async (call) => {
+      if (call.url === "/auth/customer/refresh") {
+        gate.onStart();
+        await gate.opened;
+        return { status: 401, data: errorBody("unauthorized", "invalid_refresh_token") };
+      }
+      return { status: 401, data: errorBody("unauthorized", "session_invalid") };
+    });
+    const pending = http.get("/me").catch((e) => e);
+    await gate.started;
+    await tokens.clear();
+    await tokens.set({ ...T1, accessToken: "acc-login", refreshToken: "ref-login" });
+    gate.release();
+    await pending;
+    expect(tokens.get().accessToken).toBe("acc-login");
+    expect(onSessionEnded).not.toHaveBeenCalled();
+  });
+
+  test("a renovação usa a loja capturada no envio (X-Business explícito) e a fila é por loja", async () => {
+    const gate = heldRefresh();
+    const { http, adapter, tokens, state } = await setup(async (call) => {
+      if (call.url === "/auth/customer/refresh" && call.headers["x-business"] === "outra") {
+        return { status: 200, data: { tokens: { ...T2, accessToken: "outra-2", refreshToken: "outra-r2" } } };
+      }
+      if (call.headers.authorization === "Bearer outra-2") return { status: 200, data: { ok: "outra" } };
+      if (call.headers["x-business"] === "outra") return { status: 401, data: errorBody("unauthorized", "session_invalid") };
+      return gate.handler(call);
+    });
+    const first = http.get("/me").catch((e) => e); // loja patas: renovação parada
+    await gate.started;
+
+    await tokens.clear();
+    state.slug = "outra";
+    await tokens.set({ ...T1, accessToken: "outra-1", refreshToken: "outra-r1" });
+    const second = await http.get("/me"); // loja outra: não entra na fila da patas
+    expect(second.data).toEqual({ ok: "outra" });
+
+    gate.release();
+    await first;
+    const refreshes = refreshCalls(adapter);
+    expect(refreshes.map((c) => c.headers["x-business"]).sort()).toEqual(["outra", "patas"]);
+    expect(refreshes.find((c) => c.headers["x-business"] === "outra").data).toEqual({ refreshToken: "outra-r1" });
+    expect(refreshes.find((c) => c.headers["x-business"] === "patas").data).toEqual({ refreshToken: "ref-1" });
   });
 
   test("sem Authorization na requisição, session_invalid só rejeita", async () => {

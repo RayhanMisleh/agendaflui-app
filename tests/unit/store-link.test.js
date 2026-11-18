@@ -1,4 +1,4 @@
-import { normalizeSlug, parseStoreLink, decideStoreSwitch } from "../../src/business/storeLink";
+import { normalizeSlug, parseStoreLink, decideStoreSwitch, stripStoreFromAddress } from "../../src/business/storeLink";
 
 describe("normalizeSlug", () => {
   test("apara e põe em minúsculas", () => {
@@ -64,5 +64,37 @@ describe("decideStoreSwitch", () => {
   test("sem loja nova, nada", () => {
     expect(decideStoreSwitch("a", null)).toBe("none");
     expect(decideStoreSwitch(null, null)).toBe("none");
+  });
+});
+
+describe("stripStoreFromAddress (web)", () => {
+  const fakeWindow = (pathname, search = "", hash = "") => {
+    const replaced = [];
+    return { location: { pathname, search, hash }, history: { replaceState: (...args) => replaced.push(args) }, replaced };
+  };
+
+  test("tira o código da loja da barra de endereço, sem recarregar", () => {
+    const win = fakeWindow("/patas", "?utm=x");
+    stripStoreFromAddress(win);
+    expect(win.replaced).toEqual([[null, "", "/?utm=x"]]);
+  });
+
+  test("barra final também", () => {
+    const win = fakeWindow("/patas/");
+    stripStoreFromAddress(win);
+    expect(win.replaced).toEqual([[null, "", "/"]]);
+  });
+
+  test("endereço sem código de loja ou com pedido fica como está", () => {
+    for (const path of ["/", "/patas/pedidos/abc123", "/a b", "/x/y/z"]) {
+      const win = fakeWindow(path);
+      stripStoreFromAddress(win);
+      expect(win.replaced).toEqual([]);
+    }
+  });
+
+  test("sem window ou sem history não lança", () => {
+    expect(() => stripStoreFromAddress(undefined)).not.toThrow();
+    expect(() => stripStoreFromAddress({ location: { pathname: "/patas", search: "", hash: "" } })).not.toThrow();
   });
 });

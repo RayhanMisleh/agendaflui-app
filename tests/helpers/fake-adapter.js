@@ -2,11 +2,13 @@ import { AxiosError, AxiosHeaders } from "axios";
 
 // Adaptador falso do axios para os testes: nenhuma requisição sai do processo.
 // handler(call) devolve { status, data, headers } ou lança 'network' | 'timeout'.
+// `maxCalls`: teto de chamadas; passou dele, lança erro (um laço de requisições falha em vez de travar o teste).
 // call = { method, url, baseURL, headers (chaves em minúsculas), data (JSON já lido), params }.
-export function fakeAdapter(handler) {
+export function fakeAdapter(handler, { maxCalls = 50 } = {}) {
   const calls = [];
 
   async function adapter(config) {
+    if (calls.length >= maxCalls) throw new Error(`fakeAdapter: mais de ${maxCalls} chamadas (laço de requisições?)`);
     const headers = {};
     for (const [name, value] of Object.entries(config.headers.toJSON())) {
       headers[name.toLowerCase()] = value;
