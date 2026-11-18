@@ -1,1967 +1,419 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import PointsIcon from "../../components/ui/PointsIcon";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Image,
-  TouchableOpacity,
-  Dimensions,
-  FlatList,
-  Animated,
-  ActivityIndicator,
-  Alert,
-  Platform,
-  RefreshControl,
-  Linking,
-} from "react-native";
-import { BlurView } from "expo-blur";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useFocusEffect } from "@react-navigation/native";
-import MaterialIcons from "react-native-vector-icons/MaterialIcons";
-import { theme } from "../../utils/theme";
 import { useTheme } from "../../utils/ThemeContext";
-import { parseBackendDate, formatDateForBackend } from "../../utils/dateUtils";
-import Card from "../../components/ui/Card";
-import Avatar from "../../components/ui/Avatar";
-import Button from "../../components/ui/Button";
-import PointsDisplay from "../../components/ui/PointsDisplay";
-import SectionHeader from "../../components/ui/SectionHeader";
-import Chip from "../../components/ui/Chip";
-import Skeleton from "../../components/ui/Skeleton";
-// mockData removido
-
-import {
-  getPrizes,
-  getBalance,
-  getProfile,
-  getProfessionals,
-  getServices,
-  getAvailability,
-  createAppointment,
-  getNextAppointment,
-  cancelMyAppointment,
-  rescheduleMyAppointment,
-  getBanners,
-} from "../../api/legado";
 import { useAuth } from "../../components/AuthProvider";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import Toast from "react-native-toast-message";
+import { useBusiness, useTerms } from "../../business/BusinessProvider";
+import { createIdempotencyKeys } from "../../api/idempotency";
+import {
+  listServices,
+  listProfessionals,
+  availableDays,
+  availableSlots,
+  createAppointment,
+  rescheduleAppointment,
+  cancelAppointment,
+  nextAppointment as fetchNextAppointment,
+} from "../../api/agenda";
+import { getMe } from "../../api/me";
+import { ANY_PROFESSIONAL, servicesFor, professionalParam, buildBooking, bookingSignature } from "../../booking/selection";
+import { BOOKING_STEPS } from "../../navigation/routes";
+import { localDateIn, bookingRange } from "../../utils/time";
+import { confirmAction, notify } from "../../utils/dialog";
+import { fonts, radius, type } from "../../theme/tokens";
+import Button from "../../components/ui/Button";
+import Icon from "../../components/ui/Icon";
+import Skeleton from "../../components/ui/Skeleton";
+import SaldoPontos from "./SaldoPontos";
+import Banners from "./Banners";
+import Premios from "./Premios";
+import ProximoHorario from "./ProximoHorario";
+import EscolhaProfissional from "./EscolhaProfissional";
+import EscolhaServico from "./EscolhaServico";
+import EscolhaData from "./EscolhaData";
+import EscolhaHorario from "./EscolhaHorario";
+import ResumoReserva from "./ResumoReserva";
 
-const { width } = Dimensions.get("window");
+const SLOT_GONE = ["slot_taken", "slot_unavailable"];
 
+// Dona do estado e da ordem dos passos (BOOKING_STEPS); as seções são componentes.
 const AgendarScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { theme, isDarkMode } = useTheme();
-  const BANNER_WIDTH = theme.isTablet ? width - 80 : width - 48;
-  const styles = getStyles(theme);
-  const scrollX = useRef(new Animated.Value(0)).current;
+  const { theme } = useTheme();
+  const c = theme.colors;
   const { isAuthenticated } = useAuth();
-  const [currentUser, setCurrentUser] = useState({
-    name: "",
-    points: 0,
-    clubMember: false,
-  });
-  const [professionals, setProfessionals] = useState([]);
-  const [professionalServices, setProfessionalServices] = useState([]);
-  const [prizes, setPrizes] = useState([]);
-  const [availableSlots, setAvailableSlots] = useState([]);
-  const [occupiedSlots, setOccupiedSlots] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [nextAppointment, setNextAppointmentState] = useState(null);
-  const [banners, setBanners] = useState([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [selectedProfessional, setSelectedProfessional] = useState(null);
-  const [selectedService, setSelectedService] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTime, setSelectedTime] = useState(null);
-  const [providerMap, setProviderMap] = useState({});
-  const [isRescheduling, setIsRescheduling] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const scrollViewRef = useRef(null);
+  const { business, slug } = useBusiness();
+  const terms = useTerms();
+  const keys = useRef(createIdempotencyKeys()).current;
+  const scrollRef = useRef(null);
+  const daysRequest = useRef(0);
+  const slotsRequest = useRef(0);
 
-  useEffect(() => {
-    loadInitialData();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [services, setServices] = useState([]);
+  const [professionals, setProfessionals] = useState([]);
+  const [me, setMe] = useState(null);
+  const [next, setNext] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [professionalId, setProfessionalId] = useState(null);
+  const [serviceId, setServiceId] = useState(null);
+  const [days, setDays] = useState([]);
+  const [loadingDays, setLoadingDays] = useState(false);
+  const [date, setDate] = useState(null);
+  const [availability, setAvailability] = useState(null); // { slots, totalCents, durationMin }
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slot, setSlot] = useState(null);
+  const [rescheduling, setRescheduling] = useState(null); // agendamento que está sendo remarcado
+
+  const timeZone = business ? business.timeZone : "America/Sao_Paulo";
+  const maxAdvanceDays = business && business.rules ? business.rules.maxAdvanceDays : undefined;
+  const today = localDateIn(timeZone, new Date());
+  const isClubMember = Boolean(me && me.isClubMember);
+
+  const resetSelection = useCallback(() => {
+    setProfessionalId(null);
+    setServiceId(null);
+    setDays([]);
+    setDate(null);
+    setAvailability(null);
+    setSlot(null);
+    setRescheduling(null);
+  }, []);
+
+  const loadAccount = useCallback(async () => {
+    if (!isAuthenticated) {
+      setMe(null);
+      setNext(null);
+      return;
+    }
+    const [profile, upcoming] = await Promise.all([getMe().catch(() => null), fetchNextAppointment().catch(() => null)]);
+    setMe(profile);
+    setNext(upcoming);
   }, [isAuthenticated]);
 
-  // O recarregamento ao voltar para a tela foi removido para otimizar requisições e não apagar a seleção do usuário
-
-  useEffect(() => {
-    if (selectedProfessional && selectedDate && selectedService) {
-      fetchAvailability();
-    } else {
-      setAvailableSlots([]);
-      setSelectedTime(null);
-    }
-  }, [selectedProfessional, selectedDate, selectedService]);
-
-  // Gerar próximos 7 dias
-  const getNextDays = () => {
-    const days = [];
-    const today = new Date();
-    let added = 0;
-    let offset = 0;
-    while (added < 7) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + offset);
-      const weekDayNumber = date.getDay();
-      if (weekDayNumber !== 0) {
-        // pula domingo
-        days.push({
-          id: added.toString(),
-          date: date,
-          day: date.getDate(),
-          weekDay: date
-            .toLocaleDateString("pt-BR", { weekday: "short" })
-            .replace(".", ""),
-          isToday: offset === 0,
-        });
-        added += 1;
-      }
-      offset += 1;
-    }
-    return days;
-  };
-
-  const nextDays = getNextDays();
-
-  const loadInitialData = async () => {
+  const loadAll = useCallback(async () => {
     try {
-      const storedName = await AsyncStorage.getItem("user_name");
-      if (storedName) {
-        setCurrentUser((prev) => ({ ...prev, name: storedName }));
-      }
-    } catch (err) {}
+      const [pros, svcs] = await Promise.all([listProfessionals(), listServices()]);
+      setProfessionals(pros);
+      setServices(svcs);
+    } catch (error) {
+      setProfessionals([]);
+      setServices([]);
+      notify("Não deu para carregar", error.message);
+    }
+    await loadAccount();
+  }, [loadAccount]);
 
-    await Promise.all([
-      isAuthenticated ? loadUserBalanceAndNext() : Promise.resolve(),
-      loadCatalog(),
-      loadBanners(),
-    ]);
-  };
+  // Outra loja ou outra sessão: começa do zero (nada de uma loja aparece na outra).
+  useEffect(() => {
+    let cancelled = false;
+    resetSelection();
+    setNext(null);
+    setMe(null);
+    setLoading(true);
+    loadAll().finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, isAuthenticated]);
+
+  // Dias livres para o profissional e o serviço escolhidos.
+  useEffect(() => {
+    setDays([]);
+    setDate(null);
+    setAvailability(null);
+    setSlot(null);
+    if (!professionalId || !serviceId || !business) return;
+    const request = ++daysRequest.current;
+    const { from, to } = bookingRange(timeZone, new Date(), maxAdvanceDays);
+    setLoadingDays(true);
+    availableDays({ from, to, serviceIds: [serviceId], professionalId: professionalParam(professionalId) })
+      .then((items) => {
+        if (request === daysRequest.current) setDays(items.filter((d) => d.available));
+      })
+      .catch(() => {
+        if (request === daysRequest.current) setDays([]);
+      })
+      .finally(() => {
+        if (request === daysRequest.current) setLoadingDays(false);
+      });
+  }, [professionalId, serviceId, timeZone, maxAdvanceDays]);
+
+  const loadSlots = useCallback(() => {
+    setAvailability(null);
+    setSlot(null);
+    if (!professionalId || !serviceId || !date) return;
+    const request = ++slotsRequest.current;
+    setLoadingSlots(true);
+    availableSlots({ date, serviceIds: [serviceId], professionalId: professionalParam(professionalId) })
+      .then((data) => {
+        if (request === slotsRequest.current) setAvailability(data);
+      })
+      .catch(() => {
+        if (request === slotsRequest.current) setAvailability({ slots: [], totalCents: 0, durationMin: 0 });
+      })
+      .finally(() => {
+        if (request === slotsRequest.current) setLoadingSlots(false);
+      });
+  }, [professionalId, serviceId, date]);
+
+  useEffect(loadSlots, [loadSlots]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadInitialData();
+    await loadAll();
     setRefreshing(false);
   };
 
-  const loadUserBalanceAndNext = async () => {
-    if (!isAuthenticated) {
-      setCurrentUser((prev) => ({ ...prev, points: 0 }));
-      setNextAppointmentState(null);
-      return;
+  const scrollDown = () => setTimeout(() => scrollRef.current && scrollRef.current.scrollToEnd({ animated: true }), 200);
+
+  const pickProfessional = (id) => {
+    setProfessionalId(id);
+    // O serviço escolhido pode não ser deste profissional (ao remarcar ele fica como está).
+    if (!rescheduling && serviceId && !servicesFor(id, professionals, services).some((s) => s.id === serviceId)) {
+      setServiceId(null);
     }
-
-    try {
-      // Get profile returns full user data
-      const user = await getProfile();
-      const points = user?.user_points_balance ?? 0;
-      setCurrentUser((prev) => ({
-        ...prev,
-        points: points,
-        clubMember: user?.club_member || false,
-      }));
-    } catch (err) {}
-
-    try {
-      const appt = await getNextAppointment();
-      if (appt) {
-        setNextAppointmentState(formatAppointment(appt));
-      } else {
-        setNextAppointmentState(null);
-      }
-    } catch (err) {}
+    scrollDown();
   };
 
-  const loadBanners = async () => {
-    try {
-      const data = await getBanners();
-      setBanners(data || []);
-    } catch (err) {
-      setBanners([]);
-    }
+  const pickService = (id) => {
+    setServiceId(id);
+    scrollDown();
   };
 
-  const loadCatalog = async () => {
-    setLoading(true);
+  const pickDate = (value) => {
+    setDate(value);
+    scrollDown();
+  };
+
+  const startReschedule = () => {
+    if (!next) return;
+    const target = next.professional.id;
+    setRescheduling(next);
+    setProfessionalId(professionals.some((p) => p.id === target) ? target : ANY_PROFESSIONAL);
+    setServiceId(next.items[0].serviceId);
+    setTimeout(() => scrollRef.current && scrollRef.current.scrollTo({ y: 0, animated: true }), 100);
+  };
+
+  const cancelReschedule = () => {
+    resetSelection();
+    scrollRef.current && scrollRef.current.scrollTo({ y: 0, animated: true });
+  };
+
+  const cancelNext = async () => {
+    if (!next) return;
+    const ok = await confirmAction({
+      title: "Cancelar agendamento",
+      message: "Quer cancelar o seu próximo horário?",
+      confirmText: "Cancelar horário",
+      cancelText: "Manter horário",
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusy(true);
     try {
-      const [pros, services, fetchedPrizes] = await Promise.all([
-        getProfessionals(),
-        getServices(),
-        getPrizes().catch(() => []),
-      ]);
-
-      const mappedProfessionals = (pros || [])
-        .filter((p) => p.active !== false)
-        .map((p) => ({
-          id: String(p.professional_id),
-          professional_id: p.professional_id,
-          name: p.name,
-          avatar: p.avatar_url,
-          specialty: p.bio || "Profissional",
-          rating: p.rating || 5,
-          status: "online",
-        }));
-
-      if (mappedProfessionals.length > 0) {
-        mappedProfessionals.unshift({
-          id: "any",
-          professional_id: "any",
-          name: "Qualquer Profissional",
-          avatar: null,
-          specialty: "",
-          rating: null,
-          status: "online",
-        });
-      }
-
-      const mappedServices = (services || []).map((s) => ({
-        id: String(s.service_id),
-        service_id: s.service_id,
-        name: s.name,
-        description: s.description || "",
-        price: Number(s.price),
-        duration: s.duration_min,
-        reward_points: s.reward_points,
-        icon: s.icon || "content-cut",
-      }));
-
-      setProfessionals(mappedProfessionals);
-      setProfessionalServices(mappedServices);
-
-      const mappedPrizes = (fetchedPrizes || []).map((p, index) => {
-        const colors = ["#0B6E66", "#10b981", "#f59e0b", "#ec4899", "#3b82f6"];
-        return {
-          id: String(p.prize_id),
-          prize_id: p.prize_id,
-          name: p.name,
-          points: p.points_cost,
-          icon_url: p.icon_url,
-          color: colors[index % colors.length],
-        };
-      });
-      setPrizes(mappedPrizes);
-    } catch (err) {
-      Toast.show({
-        type: "error",
-        text1: "Erro de Conexão",
-        text2: err.message || "Falha na rede. Verifique sua conexão com a internet.",
-      });
-      setProfessionals([]);
-      setProfessionalServices([]);
-      setPrizes([]);
+      await cancelAppointment(next.id);
+      await loadAccount();
+      notify("Agendamento cancelado.");
+    } catch (error) {
+      notify("Não deu para cancelar", error.message);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
-  const formatAppointment = (appt) => {
-    if (
-      !appt ||
-      typeof appt !== "object" ||
-      Array.isArray(appt) ||
-      !appt.appointment_id
-    )
-      return null;
-
-    const parsed = parseBackendDate(appt.scheduled_at);
-    if (!parsed) return null;
-
-    return {
-      id: appt.appointment_id,
-      professional_id: appt.professional?.professional_id || appt.professional_id,
-      service_id: appt.service?.service_id || appt.service_id,
-      professional: {
-        id: appt.professional?.professional_id || appt.professional_id,
-        name: appt.professional?.name || "",
-        avatar: appt.professional?.avatar_url,
-      },
-      service: {
-        id: appt.service?.service_id || appt.service_id,
-        name: appt.service?.name || "",
-      },
-      date: appt.scheduled_at,
-      dateObj: parsed.dateObj,
-      time: parsed.time,
-      status: appt.status,
-    };
-  };
-
-  const formatDateParam = (dateObj) => {
-    if (!dateObj) return null;
-    const year = dateObj.getFullYear();
-    const month = `${dateObj.getMonth() + 1}`.padStart(2, "0");
-    const day = `${dateObj.getDate()}`.padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
-
-  const fetchAvailability = async () => {
-    if (!selectedProfessional || !selectedDate || !selectedService) return;
-    setLoadingSlots(true);
-    try {
-      const pId = selectedProfessional.professional_id || selectedProfessional.id;
-      const response = await getAvailability({
-        professionalId: pId === "any" ? "any" : Number(pId),
-        date: formatDateParam(selectedDate.date),
-        serviceId: Number(selectedService.service_id || selectedService.id),
-      });
-
-      const occupied = (response?.occupied_slots || []).map((time) => ({
-        id: `occ-${time}`,
-        time,
-        available: false,
-      }));
-      const occupiedTimes = new Set(occupied.map((o) => o.time));
-
-      const available = (response?.available_slots || [])
-        .filter((time) => !occupiedTimes.has(time))
-        .map((time) => ({
-          id: time,
-          time,
-          available: true,
-        }));
-
-      setAvailableSlots(available);
-      setOccupiedSlots(Array.from(occupiedTimes));
-      setProviderMap(response?.provider_map || {});
-    } catch (err) {
-      setAvailableSlots([]);
-      setOccupiedSlots([]);
-      setProviderMap({});
-    } finally {
-      setLoadingSlots(false);
-    }
-  };
-
-  const handleConfirmAppointment = async () => {
-    if (!selectedProfessional || !selectedService || !selectedDate || !selectedTime) {
-      return;
-    }
-
+  const confirm = async () => {
     if (!isAuthenticated) {
-      if (Platform.OS === "web") {
-        const goToLogin = window.confirm(
-          "Entre na sua conta para confirmar o agendamento.\n\nDeseja fazer login agora?"
-        );
-        if (goToLogin) {
-          navigation.navigate("Login");
-        }
-        return;
-      }
-      Alert.alert(
-        "Login necessário",
-        "Entre na sua conta para confirmar o agendamento.",
-        [
-          { text: "Cancelar", style: "cancel" },
-          {
-            text: "Fazer login",
-            onPress: () => navigation.navigate("Login"),
-          },
-        ],
-      );
+      navigation.navigate("Login");
       return;
     }
+    if (!professionalId || !serviceId || !slot || submitting) return;
 
     setSubmitting(true);
+    const wasRescheduling = Boolean(rescheduling);
+    let signature = null;
     try {
-      const scheduledIsoString = formatDateForBackend(selectedDate.date, selectedTime.time);
-
-      let finalProfessionalId = Number(
-        selectedProfessional.professional_id || selectedProfessional.id,
-      );
-      if (selectedProfessional.id === "any") {
-        finalProfessionalId = providerMap[selectedTime.time];
-        if (!finalProfessionalId) {
-          const msg =
-            "Não foi possível alocar um profissional para este horário. Escolha outro horário ou recarregue a página.";
-          if (Platform.OS === "web") {
-            window.alert(msg);
-          } else {
-            Alert.alert("Aviso", msg);
-          }
-          setSubmitting(false);
-          return;
-        }
-        finalProfessionalId = Number(finalProfessionalId);
-      }
-
       let appointment;
-      if (isRescheduling && nextAppointment) {
-        const appointmentId = nextAppointment.id || nextAppointment.appointment_id;
-        appointment = await rescheduleMyAppointment({
-          appointmentId: Number(appointmentId),
-          professionalId: finalProfessionalId,
-          serviceId: Number(selectedService.service_id || selectedService.id),
-          scheduledAt: scheduledIsoString,
+      if (rescheduling) {
+        appointment = await rescheduleAppointment(rescheduling.id, {
+          startsAt: slot.startsAt,
+          professionalId: professionalParam(professionalId),
         });
       } else {
-        appointment = await createAppointment({
-          professionalId: finalProfessionalId,
-          serviceId: Number(selectedService.service_id || selectedService.id),
-          scheduledAt: scheduledIsoString,
-        });
+        const booking = buildBooking({ serviceId, startsAt: slot.startsAt, professionalId });
+        signature = bookingSignature(booking);
+        appointment = await createAppointment(booking, keys.keyFor(signature));
+        keys.done(signature);
       }
-
-      setNextAppointmentState(formatAppointment(appointment));
-      const wasRescheduling = isRescheduling;
-      setIsRescheduling(false);
-      setSelectedProfessional(null);
-      setSelectedService(null);
-      setSelectedDate(null);
-      setSelectedTime(null);
-      setAvailableSlots([]);
-      await loadUserBalanceAndNext();
-
-      // Aguarda um pequeno momento para garantir que a animação de carregamento seja percebida e que
-      // a navegação para o modal aconteça sem o spinner sumir repentinamente na tela de baixo.
-      setTimeout(() => {
-        navigation.navigate("AppointmentSuccess", {
-          appointment,
-          isReschedule: wasRescheduling,
-        });
-        // Somente voltamos o estado de submissão para falso após a navegação ter sido iniciada
-        setSubmitting(false);
-        // Volta o scroll para o topo para que, ao fechar o modal, a tela esteja na posição correta
-        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      }, 600);
-    } catch (err) {
+      setNext(appointment);
+      resetSelection();
+      navigation.navigate("AppointmentSuccess", { appointment, isReschedule: wasRescheduling });
+      if (scrollRef.current) scrollRef.current.scrollTo({ y: 0, animated: false });
+    } catch (error) {
+      if (SLOT_GONE.includes(error.reason)) {
+        notify("Esse horário acabou de ser ocupado", error.message);
+        loadSlots();
+      } else {
+        notify("Não deu para agendar", error.message);
+      }
+    } finally {
       setSubmitting(false);
-      const msg =
-        err.response?.data?.error ||
-        "Não foi possível agendar. Tente outro horário ou fale com a loja.";
-      if (Platform.OS === "web") {
-        window.alert(typeof msg === "string" ? msg : JSON.stringify(msg));
-      } else {
-        Alert.alert(
-          "Não foi possível agendar",
-          typeof msg === "string" ? msg : "Tente outro horário ou fale com a loja.",
-        );
-      }
     }
   };
 
-  const handleStartReschedule = () => {
-    if (!nextAppointment) return;
+  const professionalChoices = useMemo(
+    () => (rescheduling ? professionals.filter((p) => p.serviceIds.includes(serviceId)) : professionals),
+    [rescheduling, professionals, serviceId]
+  );
+  const serviceChoices = useMemo(
+    () => servicesFor(professionalId || ANY_PROFESSIONAL, professionals, services),
+    [professionalId, professionals, services]
+  );
+  const professional = professionals.find((p) => p.id === professionalId);
+  const professionalName = professional ? professional.name : `Qualquer ${terms.professional.singular.toLowerCase()}`;
+  const service = services.find((s) => s.id === serviceId);
+  const readyToConfirm = Boolean(professionalId && service && date && slot);
 
-    // Tentar selecionar o profissional atual
-    const targetProfessionalId = nextAppointment.professional_id || nextAppointment.professional?.id;
-    const foundProfessional = professionals.find(
-      (b) => String(b.id || b.professional_id) === String(targetProfessionalId)
-    );
-    if (foundProfessional) {
-      setSelectedProfessional(foundProfessional);
-    } else if (professionals.length > 0) {
-      setSelectedProfessional(professionals[0]);
-    }
-
-    // Tentar selecionar o serviço atual
-    const targetServiceId = nextAppointment.service_id || nextAppointment.service?.id;
-    const foundService = professionalServices.find(
-      (s) => String(s.id || s.service_id) === String(targetServiceId)
-    );
-    if (foundService) {
-      setSelectedService(foundService);
-    } else if (professionalServices.length > 0) {
-      setSelectedService(professionalServices[0]);
-    }
-
-    setSelectedDate(null);
-    setSelectedTime(null);
-    setIsRescheduling(true);
-
-    setTimeout(() => {
-      scrollViewRef.current?.scrollTo({ y: 360, animated: true });
-    }, 200);
-  };
-
-  const handleCancelReschedule = () => {
-    setIsRescheduling(false);
-    setSelectedProfessional(null);
-    setSelectedService(null);
-    setSelectedDate(null);
-    setSelectedTime(null);
-    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-  };
-
-  const handleCancelAppointment = async () => {
-    if (!nextAppointment) return;
-
-    const appointmentId = nextAppointment.id || nextAppointment.appointment_id;
-    if (!appointmentId) return;
-
-    const performCancel = async () => {
-      try {
-        setSubmitting(true);
-        await cancelMyAppointment(appointmentId);
-        await loadUserBalanceAndNext();
-        if (Platform.OS === "web") {
-          window.alert("Seu agendamento foi cancelado com sucesso.");
-        } else {
-          Alert.alert(
-            "Cancelado",
-            "Seu agendamento foi cancelado com sucesso.",
-          );
-        }
-      } catch (err) {
-        console.error("Erro ao cancelar agendamento:", err);
-        const errorMsg =
-          err.response?.data?.error ||
-          err.message ||
-          "Não foi possível cancelar o agendamento.";
-        if (Platform.OS === "web") {
-          window.alert(`Erro: ${errorMsg}`);
-        } else {
-          Alert.alert("Erro", errorMsg);
-        }
-      } finally {
-        setSubmitting(false);
-      }
-    };
-
-    if (Platform.OS === "web") {
-      const confirmCancel = window.confirm(
-        "Tem certeza que deseja cancelar seu próximo horário?"
-      );
-      if (confirmCancel) {
-        await performCancel();
-      }
-      return;
-    }
-
-    Alert.alert(
-      "Cancelar Agendamento",
-      "Tem certeza que deseja cancelar seu próximo horário?",
-      [
-        { text: "Não", style: "cancel" },
-        {
-          text: "Sim, Cancelar",
-          style: "destructive",
-          onPress: performCancel,
-        },
-      ],
-      { cancelable: true }
-    );
-  };
-
-  const renderBanner = ({ item, index }) => {
-    const inputRange = [
-      (index - 1) * BANNER_WIDTH,
-      index * BANNER_WIDTH,
-      (index + 1) * BANNER_WIDTH,
-    ];
-    const scale = scrollX.interpolate({
-      inputRange,
-      outputRange: [0.95, 1, 0.95],
-      extrapolate: "clamp",
-    });
-
-    return (
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={() => {
-          if (item.redirect_url) {
-            Linking.openURL(item.redirect_url).catch(() => {
-              Alert.alert("Erro", "Não foi possível abrir o link.");
-            });
-          }
-        }}
-        style={[styles.bannerContainer, { transform: [{ scale }] }]}
-      >
-        <Image
-          source={{ uri: item.image_url }}
-          style={styles.bannerImage}
-          resizeMode="cover"
+  const steps = {
+    profissional: (
+      <EscolhaProfissional
+        key="profissional"
+        professionals={professionalChoices}
+        selectedId={professionalId}
+        onSelect={pickProfessional}
+        title={rescheduling ? `Trocar ${terms.professional.singular.toLowerCase()}` : "Agende seu horário"}
+        subtitle={`${terms.professional.plural} disponíveis`}
+        terms={terms}
+      />
+    ),
+    servico: professionalId ? (
+      <EscolhaServico
+        key="servico"
+        services={serviceChoices}
+        selectedId={serviceId}
+        onSelect={pickService}
+        isClubMember={isClubMember}
+        terms={terms}
+        locked={Boolean(rescheduling)}
+      />
+    ) : null,
+    data:
+      professionalId && serviceId ? (
+        <EscolhaData key="data" days={days} selectedDate={date} onSelect={pickDate} today={today} loading={loadingDays} />
+      ) : null,
+    horario:
+      professionalId && serviceId && date ? (
+        <EscolhaHorario
+          key="horario"
+          slots={availability ? availability.slots : []}
+          selectedStartsAt={slot ? slot.startsAt : null}
+          onSelect={setSlot}
+          loading={loadingSlots || !availability}
         />
-        {/* Remover overlay de texto para banners profissionais que já vêm com arte */}
-      </TouchableOpacity>
-    );
-  };
-
-  const renderProfessional = ({ item }) => {
-    const isAny = item.id === "any";
-    const isSelected = selectedProfessional?.id === item.id;
-    return (
-      <TouchableOpacity
-        style={[styles.professionalCard, isSelected && styles.professionalCardSelected]}
-        onPress={() => {
-          setSelectedProfessional(item);
-          setSelectedTime(null);
-          setTimeout(() => {
-            scrollViewRef.current?.scrollToEnd({ animated: true });
-          }, 200);
-        }}
-        activeOpacity={0.7}
-      >
-        {isAny ? (
-          <View
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 32,
-              backgroundColor: theme.colors.primary + "20",
-              alignItems: "center",
-              justifyContent: "center",
-              marginBottom: 16,
-            }}
-          >
-            <MaterialIcons
-              name="search"
-              size={32}
-              color={theme.colors.primary}
-            />
-          </View>
-        ) : (
-          <Avatar
-            source={item.avatar}
-            size="lg"
-            status={item.status}
-            showStatus
-          />
-        )}
-        <Text
-          style={[
-            styles.professionalName,
-            isAny && { color: theme.colors.primary, fontWeight: "bold" },
-          ]}
-        >
-          {item.name}
-        </Text>
-        {item.specialty ? (
-          <Text style={styles.professionalSpecialty} numberOfLines={1} ellipsizeMode="tail">{item.specialty}</Text>
-        ) : null}
-
-        {!isAny && (
-          <View style={styles.professionalRating}>
-            <MaterialIcons name="star" size={14} color="#F2A93B" />
-            <Text style={styles.ratingText}>{item.rating}</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-    );
-  };
-
-  const renderService = ({ item }) => (
-    <TouchableOpacity
-      style={[
-        styles.serviceCard,
-        selectedService?.id === item.id && styles.serviceCardSelected,
-        item.highlight && styles.serviceCardHighlight,
-      ]}
-      onPress={() => {
-        setSelectedService(item);
-        setSelectedTime(null);
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 200);
-      }}
-      activeOpacity={0.7}
-    >
-      {currentUser?.clubMember && item.reward_points > 0 && (
-        <View style={styles.serviceRewardBadge}>
-          <PointsIcon size={12} />
-          <Text style={styles.serviceRewardText}>+{item.reward_points}</Text>
-        </View>
-      )}
-      <View style={styles.serviceHeader}>
-        <View
-          style={[
-            styles.serviceIconContainer,
-            selectedService?.id === item.id && styles.serviceIconSelected,
-          ]}
-        >
-          <MaterialIcons
-            name={item.icon}
-            size={24}
-            color={
-              selectedService?.id === item.id ? "#FFF" : theme.colors.primary
-            }
-          />
-        </View>
-        {item.highlight && (
-          <View style={styles.highlightBadge}>
-            <Text style={styles.highlightText}>Popular</Text>
-          </View>
-        )}
-      </View>
-      <Text style={styles.serviceName}>{item.name}</Text>
-      <Text style={styles.serviceDescription}>{item.description}</Text>
-      <View style={styles.servicePricing}>
-        <Text style={styles.servicePrice}>
-          R$ {Number(item.price || 0).toFixed(2)}
-        </Text>
-        <Text style={styles.serviceDuration}>{item.duration} min</Text>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderDateChip = ({ item }) => (
-    <TouchableOpacity
-      style={[
-        styles.dateChip,
-        selectedDate?.id === item.id && styles.dateChipSelected,
-      ]}
-      onPress={() => {
-        setSelectedDate(item);
-        setSelectedTime(null);
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 200);
-      }}
-    >
-      <Text
-        style={[
-          styles.dateWeekDay,
-          selectedDate?.id === item.id && styles.dateTextSelected,
-        ]}
-      >
-        {item.weekDay.toUpperCase()}
-      </Text>
-      <Text
-        style={[
-          styles.dateDay,
-          selectedDate?.id === item.id && styles.dateTextSelected,
-        ]}
-      >
-        {item.day}
-      </Text>
-      {item.isToday && (
-        <View
-          style={[
-            styles.todayDot,
-            selectedDate?.id === item.id && styles.todayDotSelected,
-          ]}
-        />
-      )}
-    </TouchableOpacity>
-  );
-
-  const renderTimeSlot = ({ item }) => (
-    <TouchableOpacity
-      style={[
-        styles.timeSlot,
-        selectedTime?.id === item.id && styles.timeSlotSelected,
-        !item.available && styles.timeSlotDisabled,
-      ]}
-      onPress={() => item.available && setSelectedTime(item)}
-      disabled={!item.available}
-    >
-      <Text
-        style={[
-          styles.timeText,
-          selectedTime?.id === item.id && styles.timeTextSelected,
-          !item.available && styles.timeTextDisabled,
-        ]}
-      >
-        {item.time}
-      </Text>
-    </TouchableOpacity>
-  );
-
-  const handlePrizePress = (item) => {
-    if (!isAuthenticated) {
-      if (Platform.OS === "web") {
-        const goToLogin = window.confirm(
-          "Entre na sua conta para resgatar prêmios.\n\nDeseja fazer login agora?"
-        );
-        if (goToLogin) {
-          navigation.navigate("Login");
-        }
-        return;
-      }
-      Alert.alert(
-        "Login necessário",
-        "Entre na sua conta para resgatar prêmios.",
-        [
-          { text: "Cancelar", style: "cancel" },
-          {
-            text: "Fazer login",
-            onPress: () => navigation.navigate("Login"),
-          },
-        ],
-      );
-      return;
-    }
-    if (!currentUser.clubMember) {
-      if (Platform.OS === "web") {
-        window.alert(
-          "Só quem é do clube pode resgatar prêmios."
-        );
-      } else {
-        Alert.alert(
-          "Clube",
-          "Só quem é do clube pode resgatar prêmios.",
-        );
-      }
-      return;
-    }
-    if (currentUser.points < item.points) {
-      if (Platform.OS === "web") {
-        window.alert(
-          `Você precisa de ${item.points} pontos para resgatar este prêmio.`
-        );
-      } else {
-        Alert.alert(
-          "Saldo Insuficiente",
-          `Você precisa de ${item.points} pontos para resgatar este prêmio.`,
-        );
-      }
-      return;
-    }
-    navigation.navigate("PrizeScanner", { prize: item });
-  };
-
-  const renderPrize = ({ item }) => {
-    const insufficientPoints =
-      (currentUser?.points || 0) < (item.points_cost || item.points);
-
-    return (
-      <TouchableOpacity
-        style={[
-          styles.prizeCard,
-          {
-            borderColor: insufficientPoints
-              ? theme.isDarkMode
-                ? theme.colors.borderLight
-                : "#F0F0F0"
-              : item.color + "40",
-          },
-          insufficientPoints && styles.prizeCardDisabled,
-        ]}
-        activeOpacity={insufficientPoints ? 0.6 : 0.8}
-        onPress={() => handlePrizePress(item)}
-      >
-        <View
-          style={[
-            styles.prizeIconContainer,
-            {
-              backgroundColor: insufficientPoints
-                ? theme.isDarkMode
-                  ? theme.colors.backgroundSecondary
-                  : "#F5F5F5"
-                : item.color + "15",
-            },
-          ]}
-        >
-          {item.icon_url ? (
-            <Image
-              source={{ uri: item.icon_url }}
-              style={[
-                { width: 32, height: 32, borderRadius: 8 },
-                insufficientPoints && { opacity: 0.3, grayscale: 1 },
-              ]}
-            />
-          ) : (
-            <MaterialIcons
-              name="redeem"
-              size={32}
-              color={
-                insufficientPoints ? "#CCC" : item.color || theme.colors.primary
-              }
-            />
-          )}
-        </View>
-        <View
-          style={{
-            alignItems: "center",
-            width: "100%",
-            flex: 1,
-            justifyContent: "flex-end",
-          }}
-        >
-          <View style={{ height: 40, justifyContent: "center", width: "100%" }}>
-            <Text
-              style={[
-                styles.prizeName,
-                insufficientPoints && { color: "#9E9E9E" },
-              ]}
-              numberOfLines={2}
-            >
-              {item.name}
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.prizePointsRow,
-              insufficientPoints && {
-                backgroundColor: theme.isDarkMode
-                  ? theme.colors.muted
-                  : "#F0F0F0",
-                borderColor: theme.isDarkMode ? theme.colors.border : "#E0E0E0",
-              },
-            ]}
-          >
-            <PointsIcon
-              size={14}
-              style={[
-                { marginRight: 4 },
-                insufficientPoints && { opacity: 0.4 },
-              ]}
-            />
-            <Text
-              style={[
-                styles.prizePointsText,
-                {
-                  color: insufficientPoints
-                    ? theme.colors.textMuted
-                    : theme.colors.textPrimary,
-                },
-              ]}
-            >
-              {item.points_cost || item.points}
-            </Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
+      ) : null,
   };
 
   if (loading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={{ paddingHorizontal: 24, marginTop: 16, marginBottom: 24 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <View>
-              <Skeleton width={180} height={28} style={{ marginBottom: 8 }} />
-              <Skeleton width={120} height={16} />
-            </View>
-            <Skeleton width={80} height={32} style={{ borderRadius: 16 }} />
-          </View>
-        </View>
-
-        <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
-          <Skeleton width="100%" height={140} style={{ borderRadius: 20 }} />
-        </View>
-
-        <View style={{ paddingHorizontal: 24, marginBottom: 16 }}>
-          <Skeleton width={140} height={24} style={{ marginBottom: 8 }} />
-          <Skeleton width={200} height={16} />
-        </View>
-
-        <View style={{ paddingHorizontal: 24, flexDirection: "row", gap: 16, marginBottom: 32 }}>
-          <Skeleton width={100} height={140} style={{ borderRadius: 16 }} />
-          <Skeleton width={100} height={140} style={{ borderRadius: 16 }} />
-          <Skeleton width={100} height={140} style={{ borderRadius: 16 }} />
-        </View>
-
-        <View style={{ paddingHorizontal: 24, marginBottom: 16 }}>
-          <Skeleton width={120} height={24} style={{ marginBottom: 8 }} />
-          <Skeleton width={180} height={16} />
-        </View>
-        <View style={{ paddingHorizontal: 24, gap: 12 }}>
-          <Skeleton width="100%" height={100} style={{ borderRadius: 16 }} />
-          <Skeleton width="100%" height={100} style={{ borderRadius: 16 }} />
+      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: c.ground }]}>
+        <View style={{ padding: 24 }}>
+          <Skeleton width={200} height={28} style={{ marginBottom: 8 }} />
+          <Skeleton width={140} height={16} style={{ marginBottom: 32 }} />
+          <Skeleton width="100%" height={176} style={{ borderRadius: radius.lg, marginBottom: 16 }} />
+          <Skeleton width="100%" height={96} style={{ borderRadius: radius.lg }} />
         </View>
       </View>
     );
   }
 
+  const firstName = me && me.name ? me.name.trim().split(" ")[0] : null;
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: c.ground }]}>
       <ScrollView
-        ref={scrollViewRef}
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        scrollEnabled={true}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[theme.colors.primary]}
-          />
-        }
+        contentContainerStyle={{ paddingBottom: readyToConfirm ? 200 : 40 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[c.brand]} tintColor={c.brand} />}
       >
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greeting} numberOfLines={1} ellipsizeMode="tail">
-              Olá, {isAuthenticated ? currentUser.name : "Visitante"} 👋
+            <Text style={[styles.greeting, { color: c.ink }]} numberOfLines={1}>
+              {isAuthenticated && firstName ? `Olá, ${firstName}` : "Olá, visitante"}
             </Text>
-            <Text style={styles.subGreeting} numberOfLines={1} ellipsizeMode="tail">
-              Pronto para agendar?
+            <Text style={[styles.subGreeting, { color: c.inkMuted }]} numberOfLines={1}>
+              {business ? `Pronto para agendar em ${business.name}?` : "Pronto para agendar?"}
             </Text>
           </View>
-          <View style={styles.headerRight}>
-            {isAuthenticated ? (
-              <Card style={styles.pointsCard} padding="sm">
-                <PointsDisplay amount={currentUser.points} size="md" />
-              </Card>
-            ) : (
-              <TouchableOpacity
-                style={styles.headerLoginBtn}
-                activeOpacity={0.8}
-                onPress={() => navigation.navigate("Login")}
-              >
-                <Text style={styles.headerLoginBtnText}>ENTRAR</Text>
-                <MaterialIcons
-                  name="login"
-                  size={16}
-                  color="#FFF"
-                  style={{ marginLeft: 6 }}
-                />
-              </TouchableOpacity>
-            )}
-          </View>
+          {isAuthenticated ? (
+            <SaldoPontos isAuthenticated={isAuthenticated} />
+          ) : (
+            <TouchableOpacity style={[styles.login, { backgroundColor: c.brand }]} activeOpacity={0.8} onPress={() => navigation.navigate("Login")}>
+              <Text style={[styles.loginText, { color: c.onBrand }]}>Entrar</Text>
+              <Icon name="log-in" size={16} color={c.onBrand} />
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* Banners Promocionais */}
-        {banners.length > 0 && (
-          <View style={[styles.bannersSection, { marginBottom: 0 }]}>
-            <Animated.FlatList
-              data={banners}
-              renderItem={renderBanner}
-              keyExtractor={(item) => String(item.banner_id || item.id)}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              pagingEnabled
-              snapToInterval={BANNER_WIDTH + 16}
-              decelerationRate="fast"
-              contentContainerStyle={styles.bannerList}
-              onScroll={Animated.event(
-                [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-                { useNativeDriver: true },
-              )}
-            />
-            {/* Indicadores */}
-            <View style={styles.indicators}>
-              {banners.map((_, index) => {
-                const inputRange = [
-                  (index - 1) * BANNER_WIDTH,
-                  index * BANNER_WIDTH,
-                  (index + 1) * BANNER_WIDTH,
-                ];
-                const opacity = scrollX.interpolate({
-                  inputRange,
-                  outputRange: [0.3, 1, 0.3],
-                  extrapolate: "clamp",
-                });
-                return (
-                  <Animated.View
-                    key={index}
-                    style={[styles.indicator, { opacity }]}
-                  />
-                );
-              })}
-            </View>
-          </View>
-        )}
+        <Banners />
+        <Premios navigation={navigation} isAuthenticated={isAuthenticated} clubMember={isClubMember} />
 
-        {/* Bloco de Prêmios */}
-        <View>
-          <SectionHeader
-            title="Prêmios"
-            subtitle="Troque seus pontos"
-            style={styles.sectionHeader}
-          />
-          <View style={styles.prizesContainer}>
-            <FlatList
-              data={prizes}
-              renderItem={renderPrize}
-              keyExtractor={(item) => item.id}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.prizesList}
-            />
-            {(!isAuthenticated || !currentUser.clubMember) && (
-              <View style={styles.clubeOverlay}>
-                <BlurView
-                  intensity={10}
-                  tint="light"
-                  style={styles.blurContainer}
-                />
-                <View style={styles.clubeOverlayContent}>
-                  <View style={styles.clubeLockCircle}>
-                    <MaterialIcons
-                      name="lock"
-                      size={32}
-                      color={theme.colors.primary}
-                    />
-                  </View>
-                  <Text style={styles.clubeOverlayTitle}>Clube</Text>
-                  <Text style={styles.clubeOverlayText}>
-                    Resgate prêmios exclusivos sendo membro.
-                  </Text>
-                  {!isAuthenticated && (
-                    <TouchableOpacity
-                      style={styles.clubeCTAButton}
-                      onPress={() => navigation.navigate("Login")}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.clubeCTAButtonText}>Entrar para participar</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {nextAppointment && !isRescheduling ? (
-          <View style={styles.sectionContainer}>
-            <SectionHeader
-              title="Seu Próximo Horário"
-              subtitle="Tudo pronto para recebê-lo"
-              style={styles.sectionHeader}
-            />
-            <Card style={styles.appointmentCard}>
-              <View style={styles.appointmentHeader}>
-                <View
-                  style={[
-                    styles.appointmentIconBadge,
-                    { backgroundColor: theme.colors.success },
-                  ]}
-                >
-                  <MaterialIcons
-                    name="event-available"
-                    size={18}
-                    color="#FFF"
-                  />
-                </View>
-                <Text style={styles.appointmentLabel}>
-                  Agendamento Confirmado
-                </Text>
-                <View style={styles.appointmentStatusBadge}>
-                  <View style={styles.appointmentStatusDot} />
-                  <Text style={styles.appointmentStatusText}>Confirmado</Text>
-                </View>
-              </View>
-              <View style={styles.appointmentContent}>
-                <Avatar
-                  source={nextAppointment.professional.avatar}
-                  size="md"
-                  name={nextAppointment.professional.name}
-                />
-                <View style={styles.appointmentInfo}>
-                  <Text style={styles.appointmentService}>
-                    {nextAppointment.service.name}
-                  </Text>
-                  <Text style={styles.appointmentProfessional}>
-                    com {nextAppointment.professional.name}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.appointmentTimeRow}>
-                <MaterialIcons
-                  name="access-time"
-                  size={16}
-                  color={theme.colors.primary}
-                />
-                <Text style={styles.appointmentTime}>
-                  {nextAppointment.dateObj
-                    ? nextAppointment.dateObj.toLocaleDateString("pt-BR", {
-                        weekday: "long",
-                        day: "numeric",
-                        month: "long",
-                        timeZone: "UTC",
-                      })
-                    : ""}{" "}
-                  às {nextAppointment.time}
-                </Text>
-              </View>
-            </Card>
-            <View style={{ paddingHorizontal: 24, gap: 10, marginTop: -8 }}>
-              <Button
-                title="Cancelar Agendamento"
-                variant="outline"
-                size="sm"
-                onPress={handleCancelAppointment}
-                loading={submitting}
-                style={{ borderColor: theme.colors.destructive }}
-                textStyle={{ color: theme.colors.destructive }}
-              />
-              <Button
-                title="Trocar Horário ou Serviço"
-                variant="primary"
-                size="sm"
-                onPress={handleStartReschedule}
-                icon={<MaterialIcons name="event-repeat" size={18} color="#FFF" />}
-              />
-            </View>
-          </View>
+        {next && !rescheduling ? (
+          <ProximoHorario appointment={next} busy={busy} onCancel={cancelNext} onReschedule={startReschedule} />
         ) : (
-          <View style={styles.sectionContainer}>
-            {/* Banner de Alteração de Agendamento */}
-            {isRescheduling && (
-              <View style={[styles.rescheduleBanner, { backgroundColor: theme.colors.card, borderColor: theme.colors.primary }]}>
+          <View>
+            {rescheduling ? (
+              <View style={[styles.rescheduleBar, { backgroundColor: c.brandTint, borderColor: c.brand }]}>
                 <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                    <MaterialIcons name="edit-calendar" size={18} color={theme.colors.primary} />
-                    <Text style={[styles.rescheduleBannerTitle, { color: theme.colors.primary }]}>
-                      Alterando Agendamento
-                    </Text>
-                  </View>
-                  <Text style={[styles.rescheduleBannerSub, { color: theme.colors.textMuted }]}>
-                    Selecione o novo serviço, dia ou horário desejado
-                  </Text>
+                  <Text style={[styles.rescheduleTitle, { color: c.ink }]}>Trocando o horário</Text>
+                  <Text style={[styles.rescheduleSub, { color: c.inkMuted }]}>Escolha o novo dia e horário.</Text>
                 </View>
-                <TouchableOpacity
-                  onPress={handleCancelReschedule}
-                  style={styles.cancelRescheduleBtn}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.cancelRescheduleBtnText, { color: theme.colors.textMuted }]}>Cancelar</Text>
-                  <MaterialIcons name="close" size={16} color={theme.colors.textMuted} />
+                <TouchableOpacity onPress={cancelReschedule} style={styles.rescheduleCancel} activeOpacity={0.7}>
+                  <Text style={[styles.rescheduleCancelText, { color: c.ink }]}>Voltar</Text>
                 </TouchableOpacity>
               </View>
-            )}
-
-            {/* Escolha do profissional */}
-            <SectionHeader
-              title={isRescheduling ? "Trocar profissional" : "Agende seu horário"}
-              subtitle="Profissionais disponíveis"
-              style={styles.sectionHeader}
-            />
-            <FlatList
-              data={professionals}
-              renderItem={renderProfessional}
-              keyExtractor={(item) => item.id}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.professionalsList}
-            />
-
-            {/* Serviços */}
-            {selectedProfessional && (
-              <>
-                <SectionHeader
-                  title="Serviços"
-                  subtitle="O que você precisa hoje?"
-                  style={styles.sectionHeader}
-                />
-                <FlatList
-                  data={professionalServices}
-                  renderItem={renderService}
-                  keyExtractor={(item) => item.id}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.servicesList}
-                />
-              </>
-            )}
-
-            {/* Calendário */}
-            {selectedProfessional && selectedService && (
-              <View>
-                <SectionHeader
-                  title="Data"
-                  subtitle="Selecione o melhor dia"
-                  style={styles.sectionHeader}
-                />
-                <FlatList
-                  data={nextDays}
-                  renderItem={renderDateChip}
-                  keyExtractor={(item) => item.id}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.datesList}
-                />
-              </View>
-            )}
-
-            {/* Horários */}
-            {selectedProfessional && selectedService && selectedDate && (
-              <>
-                <SectionHeader
-                  title="Horário"
-                  subtitle="Horários disponíveis"
-                  style={styles.sectionHeader}
-                />
-                {loadingSlots ? (
-                  <View style={styles.timeSlotsGrid}>
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map(key => (
-                      <Skeleton key={key} width={(width - 48 - 32) / 4} height={44} style={{ borderRadius: 12, marginBottom: 12 }} />
-                    ))}
-                  </View>
-                ) : availableSlots.length === 0 ? (
-                  <Text
-                    style={{
-                      paddingHorizontal: 24,
-                      color: theme.colors.textMuted,
-                    }}
-                  >
-                    Nenhum horário disponível para este dia.
-                  </Text>
-                ) : (
-                  <View style={styles.timeSlotsGrid}>
-                    {availableSlots.map((slot) => (
-                      <TouchableOpacity
-                        key={slot.id}
-                        style={[
-                          styles.timeSlot,
-                          selectedTime?.id === slot.id &&
-                            styles.timeSlotSelected,
-                          !slot.available && styles.timeSlotDisabled,
-                        ]}
-                        onPress={() => slot.available && setSelectedTime(slot)}
-                        disabled={!slot.available}
-                      >
-                        <Text
-                          style={[
-                            styles.timeText,
-                            selectedTime?.id === slot.id &&
-                              styles.timeTextSelected,
-                            !slot.available && styles.timeTextDisabled,
-                          ]}
-                        >
-                          {slot.time}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </>
-            )}
+            ) : null}
+            {BOOKING_STEPS.map((step) => steps[step])}
           </View>
         )}
-
-        {/* Espaço para o botão fixo */}
-        <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Botão Confirmar Fixo */}
-      {selectedProfessional && selectedService && selectedDate && selectedTime && (
-        <View
-          style={[
-            styles.confirmButtonContainer,
-            { paddingBottom: insets.bottom + 16 },
-          ]}
-        >
-          <Button
-            title={
-              !isAuthenticated
-                ? "Entrar para agendar"
-                : isRescheduling
-                ? "Confirmar Alteração"
-                : "Confirmar Agendamento"
-            }
-            onPress={
-              isAuthenticated
-                ? handleConfirmAppointment
-                : () => navigation.navigate("Login")
-            }
-            fullWidth
-            size="lg"
-            loading={submitting}
-            icon={
-              <MaterialIcons
-                name={
-                  !isAuthenticated
-                    ? "login"
-                    : isRescheduling
-                    ? "event-available"
-                    : "check-circle"
-                }
-                size={20}
-                color="#FFF"
-              />
-            }
-          />
-        </View>
-      )}
+      {readyToConfirm ? (
+        <ResumoReserva
+          service={service}
+          professionalName={professionalName}
+          date={date}
+          slot={slot}
+          totalCents={availability ? availability.totalCents : service.priceCents}
+          durationMin={availability ? availability.durationMin : service.durationMin}
+          authenticated={isAuthenticated}
+          rescheduling={Boolean(rescheduling)}
+          submitting={submitting}
+          onConfirm={confirm}
+        />
+      ) : null}
     </View>
   );
 };
 
-const getStyles = (theme) => {
-  const BANNER_WIDTH = theme.isTablet ? width - 80 : width - 48;
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.colors.backgroundSecondary,
-    },
-    scrollContent: {
-      paddingBottom: 20,
-    },
-    header: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingHorizontal: 24,
-      paddingVertical: 10,
-    },
-    headerLeft: {
-      flex: 1,
-      marginRight: 10,
-    },
-    greeting: {
-      fontSize: theme.fontSizes["2xl"],
-      fontWeight: "700",
-      color: theme.colors.textPrimary,
-    },
-    subGreeting: {
-      fontSize: theme.fontSizes.sm,
-      color: theme.colors.textMuted,
-      marginTop: 2,
-    },
-    headerRight: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-    pointsCard: {
-      backgroundColor: theme.colors.pointsBackground,
-    },
-    headerLoginBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.colors.primary,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderRadius: 20,
-    },
-    headerLoginBtnText: {
-      color: "#FFF",
-      fontSize: 13,
-      fontWeight: "800",
-      letterSpacing: 0.5,
-    },
-    // Prize Carousel
-    prizesList: {
-      paddingHorizontal: 24,
-      paddingBottom: 20,
-      paddingTop: 20,
-    },
-    prizeCard: {
-      width: theme.isTablet ? (width - 80) / 3 : Math.max(140, width * 0.38),
-      height: theme.isTablet ? 300 : 165,
-      backgroundColor: theme.colors.card,
-      borderRadius: theme.borderRadius.lg,
-      padding: theme.spacing.md,
-      marginRight: theme.spacing.md,
-      alignItems: "center",
-      ...theme.shadows.md,
-      borderWidth: 1,
-      borderColor: theme.colors.borderLight,
-    },
-    prizeCardDisabled: {
-      backgroundColor: theme.isDarkMode ? theme.colors.muted : "#FAFAFA",
-      shadowOpacity: 0.02,
-      elevation: 1,
-    },
-    prizeIconContainer: {
-      width: 60,
-      height: 60,
-      borderRadius: 16,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 8,
-    },
-    prizeName: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: theme.colors.textPrimary,
-      textAlign: "center",
-    },
-    prizePointsRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: theme.isDarkMode ? theme.colors.background : "#f3f4f6",
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 8,
-    },
-    prizePointsText: {
-      fontSize: 13,
-      fontWeight: "800",
-      color: theme.colors.points,
-      marginLeft: 4,
-    },
-    // Reschedule Banner
-    rescheduleBanner: {
-      marginHorizontal: 24,
-      marginTop: 8,
-      marginBottom: 16,
-      padding: 16,
-      borderRadius: theme.borderRadius.lg,
-      borderWidth: 1.5,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      ...theme.shadows.sm,
-    },
-    rescheduleBannerTitle: {
-      fontSize: 15,
-      fontWeight: "700",
-    },
-    rescheduleBannerSub: {
-      fontSize: 12,
-      marginTop: 2,
-    },
-    cancelRescheduleBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingVertical: 6,
-      paddingHorizontal: 10,
-      borderRadius: 12,
-      backgroundColor: theme.isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
-      marginLeft: 12,
-    },
-    cancelRescheduleBtnText: {
-      fontSize: 12,
-      fontWeight: "600",
-    },
-    // Appointment Card
-    appointmentCard: {
-      marginHorizontal: 24,
-      marginBottom: 16,
-      backgroundColor: theme.colors.card,
-      borderWidth: 1,
-      borderColor: theme.colors.borderLight,
-      borderRadius: theme.borderRadius.lg,
-      padding: theme.spacing.md,
-    },
-    appointmentHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 14,
-    },
-    appointmentIconBadge: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      backgroundColor: theme.colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    appointmentLabel: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: theme.colors.textPrimary,
-      marginLeft: 10,
-      flex: 1,
-    },
-    appointmentStatusBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.colors.successLight,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: 20,
-    },
-    appointmentStatusDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: theme.colors.success,
-      marginRight: 5,
-    },
-    appointmentStatusText: {
-      fontSize: 11,
-      fontWeight: "600",
-      color: theme.colors.success,
-    },
-    appointmentContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 12,
-    },
-    appointmentInfo: {
-      marginLeft: 12,
-      flex: 1,
-    },
-    appointmentService: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: theme.colors.textPrimary,
-    },
-    appointmentProfessional: {
-      fontSize: 14,
-      color: theme.colors.textSecondary,
-      marginTop: 2,
-    },
-    appointmentTimeRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.colors.backgroundSecondary,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      borderRadius: 10,
-    },
-    appointmentTime: {
-      fontSize: 13,
-      color: theme.colors.primary,
-      marginLeft: 8,
-      fontWeight: "600",
-    },
-    noAppointmentContent: {
-      paddingTop: 2,
-    },
-    noAppointmentTitle: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: theme.colors.textPrimary,
-      marginBottom: 4,
-    },
-    noAppointmentText: {
-      fontSize: 13,
-      color: theme.colors.textSecondary,
-      lineHeight: 18,
-    },
-    // Banners
-    bannersSection: {
-      marginBottom: 32,
-    },
-    bannerList: {
-      paddingHorizontal: 24,
-    },
-    bannerContainer: {
-      width: BANNER_WIDTH,
-      height: theme.isTablet ? 350 : 160,
-      marginRight: 16,
-      borderRadius: theme.borderRadius.lg,
-      overflow: "hidden",
-    },
-    bannerImage: {
-      width: "100%",
-      height: "100%",
-    },
-    bannerOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      justifyContent: "flex-end",
-      padding: 20,
-    },
-    bannerTitle: {
-      fontSize: 20,
-      fontWeight: "700",
-      color: "#FFF",
-    },
-    bannerSubtitle: {
-      fontSize: 14,
-      color: "rgba(255,255,255,0.9)",
-      marginTop: 4,
-    },
-    indicators: {
-      flexDirection: "row",
-      justifyContent: "center",
-      marginTop: 12,
-    },
-    indicator: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: theme.colors.primary,
-      marginHorizontal: 4,
-    },
-    // Section
-    sectionContainer: {
-      marginBottom: 0,
-    },
-    sectionHeader: {
-      paddingHorizontal: 24,
-      marginTop: 16,
-      marginBottom: 4,
-    },
-    // Professionals
-    professionalsList: {
-      paddingHorizontal: 24,
-      paddingBottom: 20,
-      paddingTop: 20,
-    },
-    professionalCard: {
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 20,
-      paddingHorizontal: 12,
-      backgroundColor: theme.colors.card,
-      borderRadius: 20,
-      marginRight: 14,
-      width: 130,
-      height: 175,
-      ...theme.shadows.md,
-      borderWidth: 1.5,
-      borderColor: theme.isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
-    },
-    professionalCardSelected: {
-      borderColor: theme.colors.primary,
-      backgroundColor: theme.colors.primaryLight + "10",
-    },
-    professionalName: {
-      fontSize: 13,
-      fontWeight: "800",
-      color: theme.colors.textPrimary,
-      marginTop: 12,
-      textAlign: "center",
-      letterSpacing: 0.3,
-    },
-    professionalSpecialty: {
-      fontSize: 11,
-      color: theme.colors.textMuted,
-      marginTop: 2,
-      textAlign: "center",
-    },
-    professionalRating: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginTop: 6,
-    },
-    ratingText: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: theme.colors.textSecondary,
-      marginLeft: 4,
-    },
-    // Services
-    servicesList: {
-      paddingHorizontal: 24,
-      paddingBottom: 20,
-      paddingTop: 10,
-    },
-    serviceCard: {
-      padding: theme.spacing.md,
-      backgroundColor: theme.colors.card,
-      borderRadius: theme.borderRadius.lg,
-      marginRight: theme.spacing.md,
-      width: theme.isTablet ? (width - 80) / 3 : Math.max(160, width * 0.42),
-      ...theme.shadows.sm,
-      borderWidth: 2,
-      borderColor: theme.colors.borderLight || "#E5E7EB",
-    },
-    serviceRewardBadge: {
-      position: "absolute",
-      top: -10,
-      right: -10,
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: "#F2A93B",
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 12,
-      borderWidth: 2,
-      borderColor: theme.colors.card,
-      ...theme.shadows.md,
-      zIndex: 10,
-    },
-    serviceRewardText: {
-      fontSize: 12,
-      fontWeight: "900",
-      color: "#000",
-      marginLeft: 4,
-    },
-    serviceCardSelected: {
-      borderColor: theme.colors.primary,
-      backgroundColor: theme.colors.primaryLight + "10",
-    },
-    serviceCardHighlight: {
-      borderColor: theme.colors.primary + "40",
-    },
-    serviceHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "flex-start",
-      marginBottom: 12,
-    },
-    serviceIconContainer: {
-      width: 44,
-      height: 44,
-      borderRadius: 12,
-      backgroundColor: theme.colors.primaryLight + "20",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    serviceIconSelected: {
-      backgroundColor: theme.colors.primary,
-    },
-    highlightBadge: {
-      backgroundColor: theme.colors.primary,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 6,
-    },
-    highlightText: {
-      fontSize: 10,
-      fontWeight: "600",
-      color: "#FFF",
-    },
-    serviceName: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: theme.colors.textPrimary,
-    },
-    serviceDescription: {
-      fontSize: 12,
-      color: theme.colors.textMuted,
-      marginTop: 4,
-    },
-    servicePricing: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginTop: 12,
-    },
-    servicePrice: {
-      fontSize: 16,
-      fontWeight: "700",
-      color: theme.colors.primary,
-    },
-    serviceDuration: {
-      fontSize: 12,
-      color: theme.colors.textMuted,
-    },
-    // Dates
-    datesList: {
-      paddingHorizontal: 24,
-    },
-    dateChip: {
-      alignItems: "center",
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      backgroundColor: theme.colors.card,
-      borderRadius: theme.borderRadius.lg,
-      marginRight: 10,
-      minWidth: 60,
-      borderWidth: 1,
-      borderColor: theme.colors.borderLight || "#E5E7EB",
-    },
-    dateChipSelected: {
-      backgroundColor: theme.colors.primary,
-      borderColor: theme.colors.primary,
-    },
-    dateWeekDay: {
-      fontSize: 11,
-      fontWeight: "600",
-      color: theme.colors.textMuted,
-    },
-    dateDay: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: theme.colors.textPrimary,
-      marginTop: 4,
-    },
-    dateTextSelected: {
-      color: "#FFF",
-    },
-    todayDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: theme.colors.primary,
-      marginTop: 6,
-    },
-    todayDotSelected: {
-      backgroundColor: "#FFF",
-    },
-    // Time Slots
-    timeSlotsGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      paddingHorizontal: 24,
-      gap: 10,
-    },
-    timeSlot: {
-      width: "31%",
-      paddingVertical: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: theme.colors.card,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.borderLight || "#E5E7EB",
-    },
-    timeSlotSelected: {
-      backgroundColor: theme.colors.primary,
-      borderColor: theme.colors.primary,
-    },
-    timeSlotDisabled: {
-      backgroundColor: theme.colors.backgroundSecondary,
-      opacity: 0.5,
-    },
-    timeText: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.colors.textSecondary,
-    },
-    timeTextSelected: {
-      color: "#FFF",
-    },
-    timeTextDisabled: {
-      color: theme.colors.textMuted,
-    },
-    // Confirm Button
-    confirmButtonContainer: {
-      position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
-      backgroundColor: theme.colors.backgroundSecondary,
-      paddingHorizontal: 24,
-      paddingTop: 16,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.borderLight,
-    },
-    prizesContainer: {
-      position: "relative",
-      height: theme.isTablet ? 360 : 205,
-    },
-    clubeOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      justifyContent: "center",
-      alignItems: "center",
-      zIndex: 10,
-      backgroundColor: theme.isDarkMode
-        ? "rgba(0,0,0,0.4)"
-        : "rgba(255,255,255,0.05)",
-    },
-    blurContainer: {
-      ...StyleSheet.absoluteFillObject,
-    },
-    clubeOverlayContent: {
-      padding: 16,
-      alignItems: "center",
-      zIndex: 20,
-      width: "100%",
-    },
-    clubeLockCircle: {
-      width: 52,
-      height: 52,
-      borderRadius: 26,
-      backgroundColor: theme.isDarkMode
-        ? "rgba(30,30,30,0.95)"
-        : "rgba(255,255,255,0.95)",
-      justifyContent: "center",
-      alignItems: "center",
-      marginBottom: 8,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 10,
-      elevation: 3,
-    },
-    clubeOverlayTitle: {
-      color: theme.colors.textPrimary,
-      fontSize: 22,
-      fontWeight: "900",
-      marginBottom: 6,
-      textAlign: "center",
-    },
-    clubeOverlayText: {
-      color: theme.colors.textMuted,
-      fontSize: 13,
-      textAlign: "center",
-      marginBottom: 20,
-      lineHeight: 18,
-      paddingHorizontal: 32,
-      fontWeight: "500",
-    },
-    clubeCTAButton: {
-      borderWidth: 1.5,
-      borderColor: theme.colors.primary,
-      paddingVertical: 10,
-      paddingHorizontal: 24,
-      borderRadius: 12,
-      backgroundColor: theme.isDarkMode
-        ? "rgba(11, 110, 102,0.15)"
-        : "rgba(255,255,255,0.7)",
-    },
-    clubeCTAButtonText: {
-      color: theme.colors.primary,
-      fontSize: 13,
-      fontWeight: "800",
-      letterSpacing: 0.8,
-    },
-  });
-};
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, paddingVertical: 12 },
+  headerLeft: { flex: 1, marginRight: 12 },
+  greeting: { ...type.title },
+  subGreeting: { ...type.small, marginTop: 2 },
+  login: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.pill },
+  loginText: { fontFamily: fonts.textBold, fontSize: 14 },
+  rescheduleBar: { flexDirection: "row", alignItems: "center", marginHorizontal: 24, marginTop: 16, padding: 14, borderRadius: radius.lg, borderWidth: 1 },
+  rescheduleTitle: { fontFamily: fonts.textBold, fontSize: 15, lineHeight: 20 },
+  rescheduleSub: { ...type.small },
+  rescheduleCancel: { paddingVertical: 8, paddingHorizontal: 14 },
+  rescheduleCancelText: { fontFamily: fonts.textBold, fontSize: 14 },
+});
 
 export default AgendarScreen;

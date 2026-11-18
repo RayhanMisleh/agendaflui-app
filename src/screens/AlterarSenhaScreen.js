@@ -1,359 +1,51 @@
 import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import MaterialIcons from "react-native-vector-icons/MaterialIcons";
-import { changePassword } from "../api/resetPasswordApi";
 import Toast from "react-native-toast-message";
-import { useTheme } from "../utils/ThemeContext";
+import EntryLayout from "../components/entry/EntryLayout";
+import Field from "../components/entry/Field";
+import FormMessage from "../components/entry/FormMessage";
+import Button from "../components/ui/Button";
+import { changePassword } from "../api/me";
+import { validatePassword } from "../utils/helpers";
 
 export default function AlterarSenhaScreen({ navigation }) {
-  const { theme } = useTheme();
-  const { isDarkMode } = theme;
-  const styles = getStyles(theme, isDarkMode);
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [errors, setErrors] = useState({});
+  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const validatePasswords = () => {
-    if (!newPassword.trim()) {
-      Alert.alert("Campo obrigatório", "Por favor, insira a nova senha.");
-      return false;
-    }
-
-    if (newPassword.length < 6) {
-      Alert.alert(
-        "Senha inválida",
-        "A senha deve ter pelo menos 6 caracteres."
-      );
-      return false;
-    }
-
-    if (!confirmPassword.trim()) {
-      Alert.alert("Campo obrigatório", "Por favor, confirme a nova senha.");
-      return false;
-    }
-
-    if (newPassword !== confirmPassword) {
-      Alert.alert(
-        "As senhas são diferentes",
-        "A nova senha e a confirmação devem ser iguais."
-      );
-      return false;
-    }
-
-    return true;
+  const validate = () => {
+    const found = {};
+    if (!current) found.current = "Digite a senha atual.";
+    if (!validatePassword(next)) found.next = "Use de 10 a 200 caracteres na senha.";
+    if (repeat !== next) found.repeat = "As senhas não são iguais.";
+    setErrors(found);
+    return Object.keys(found).length === 0;
   };
 
-  const handleChangePassword = async () => {
-    if (!validatePasswords()) return;
-
+  const submit = async () => {
+    setMessage("");
+    if (loading || !validate()) return;
+    setLoading(true);
     try {
-      setLoading(true);
-
-      const response = await changePassword(newPassword);
-
-      Toast.show({
-        type: "success",
-        text1: "Senha alterada!",
-        text2: response.message || "Sua senha foi alterada com sucesso!",
-        visibilityTime: 4000,
-      });
-
-      // Voltar para a tela anterior após sucesso
+      await changePassword({ current, next });
+      Toast.show({ type: "success", text1: "Senha trocada.", visibilityTime: 4000 });
       navigation.goBack();
     } catch (error) {
-      console.error("Erro ao alterar senha:", error);
-
-      Alert.alert(
-        "Erro",
-        error.message || "Não foi possível alterar a senha. Tente novamente."
-      );
+      setMessage(error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleBack = () => {
-    navigation.goBack();
-  };
-
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardView}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-            <MaterialIcons
-              name="arrow-back"
-              size={24}
-              color={theme.colors.textPrimary}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Alterar Senha</Text>
-          <View style={styles.headerRight} />
-        </View>
-
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Ícone e título */}
-          <View style={styles.iconContainer}>
-            <View style={styles.iconCircle}>
-              <MaterialIcons
-                name="lock"
-                size={48}
-                color={theme.colors.primary}
-              />
-            </View>
-            <Text style={styles.title}>Nova Senha</Text>
-            <Text style={styles.subtitle}>
-              Digite sua nova senha abaixo. Certifique-se de usar uma senha
-              segura.
-            </Text>
-          </View>
-
-          {/* Formulário */}
-          <View style={styles.form}>
-            {/* Nova Senha */}
-            <View style={styles.inputContainer}>
-              <MaterialIcons name="lock" size={20} color={theme.colors.textMuted} />
-              <TextInput
-                style={styles.input}
-                placeholder="Nova senha"
-                placeholderTextColor={theme.colors.textMuted}
-                value={newPassword}
-                onChangeText={setNewPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!loading}
-              />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <MaterialIcons
-                  name={showPassword ? "visibility" : "visibility-off"}
-                  size={20}
-                  color={theme.colors.textMuted}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Confirmar Senha */}
-            <View style={styles.inputContainer}>
-              <MaterialIcons
-                name="lock-outline"
-                size={20}
-                color={theme.colors.textMuted}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Confirmar nova senha"
-                placeholderTextColor={theme.colors.textMuted}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry={!showConfirmPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!loading}
-              />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-              >
-                <MaterialIcons
-                  name={showConfirmPassword ? "visibility" : "visibility-off"}
-                  size={20}
-                  color={theme.colors.textMuted}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Dicas de segurança */}
-            <View style={styles.securityTips}>
-              <Text style={styles.securityTitle}>
-                Dicas para uma senha segura:
-              </Text>
-              <Text style={styles.securityTip}>• Pelo menos 6 caracteres</Text>
-              <Text style={styles.securityTip}>
-                • Combine letras, números e símbolos
-              </Text>
-              <Text style={styles.securityTip}>
-                • Evite informações pessoais
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.changeButton,
-                loading && styles.changeButtonDisabled,
-              ]}
-              onPress={handleChangePassword}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <>
-                  <MaterialIcons name="save" size={20} color="white" />
-                  <Text style={styles.changeButtonText}>Alterar Senha</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    <EntryLayout title="Alterar senha" hint="Por segurança, você sai dos outros aparelhos." onBack={() => navigation.goBack()}>
+      <FormMessage kind="error">{message}</FormMessage>
+      <Field label="Senha atual" secure value={current} onChangeText={setCurrent} error={errors.current} autoCapitalize="none" autoComplete="current-password" textContentType="password" />
+      <Field label="Senha nova" secure value={next} onChangeText={setNext} error={errors.next} hint="De 10 a 200 caracteres." autoCapitalize="none" autoComplete="new-password" textContentType="newPassword" />
+      <Field label="Repita a senha nova" secure value={repeat} onChangeText={setRepeat} error={errors.repeat} autoCapitalize="none" autoComplete="new-password" textContentType="newPassword" onSubmitEditing={submit} />
+      <Button title="Alterar senha" onPress={submit} loading={loading} fullWidth size="lg" />
+    </EntryLayout>
   );
 }
-
-const getStyles = (theme, isDarkMode) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.backgroundSecondary,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: theme.colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderLight,
-  },
-  backButton: {
-    padding: 8,
-    borderRadius: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: theme.colors.textPrimary,
-    flex: 1,
-    textAlign: "center",
-    marginHorizontal: 16,
-  },
-  headerRight: {
-    width: 40,
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 32,
-  },
-  iconContainer: {
-    alignItems: "center",
-    marginBottom: 32,
-  },
-  iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: isDarkMode ? "rgba(225, 172, 70, 0.15)" : theme.colors.primary + "20",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: theme.colors.textPrimary,
-    textAlign: "center",
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: theme.colors.textMuted,
-    textAlign: "center",
-    lineHeight: 24,
-  },
-  form: {
-    marginBottom: 32,
-  },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: theme.colors.card,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.borderLight,
-    ...(isDarkMode ? {} : theme.shadows.sm),
-  },
-  input: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 16,
-    color: theme.colors.textPrimary,
-  },
-  eyeButton: {
-    padding: 4,
-  },
-  securityTips: {
-    backgroundColor: theme.colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: theme.colors.borderLight,
-    ...(isDarkMode ? {} : theme.shadows.sm),
-  },
-  securityTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: theme.colors.textPrimary,
-    marginBottom: 8,
-  },
-  securityTip: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    marginBottom: 4,
-  },
-  changeButton: {
-    backgroundColor: theme.colors.primary,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 16,
-    borderRadius: 12,
-    ...theme.shadows.sm,
-  },
-  changeButtonDisabled: {
-    opacity: 0.7,
-  },
-  changeButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-});

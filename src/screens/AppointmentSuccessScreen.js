@@ -1,329 +1,96 @@
-import React, { useEffect, useMemo, useRef } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Animated,
-  Easing,
-} from "react-native";
+import React, { useEffect, useRef } from "react";
+import { View, Text, StyleSheet, Animated, Easing } from "react-native";
+import { useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { useTheme } from "../utils/ThemeContext";
-import { parseBackendDate } from "../utils/dateUtils";
 import Button from "../components/ui/Button";
 import Avatar from "../components/ui/Avatar";
+import Icon from "../components/ui/Icon";
+import Card from "../components/ui/Card";
+import { fonts, type } from "../theme/tokens";
+import { formatDay } from "../utils/time";
+import { formatCents } from "../utils/money";
 
-import { useRoute } from "@react-navigation/native";
-
+// Recebe o agendamento da v1 (data e hora já vêm no fuso da loja).
 const AppointmentSuccessScreen = ({ navigation }) => {
   const route = useRoute();
   const insets = useSafeAreaInsets();
-  const { theme, isDarkMode } = useTheme();
-  const styles = getStyles(theme, isDarkMode);
-  const scaleAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const scale = useRef(new Animated.Value(0)).current;
+  const fade = useRef(new Animated.Value(0)).current;
 
   const appointment = route.params?.appointment || null;
-
-  const formatted = useMemo(() => {
-    if (!appointment) return null;
-    
-    // Forçar interpretação UTC usando utilitário centralizado
-    const parsed = parseBackendDate(appointment.scheduled_at);
-    if (!parsed) return null;
-    
-    const when = parsed.dateObj;
-    const h = parsed.hour;
-    const m = parsed.minute;
-    
-    return {
-      dateLabel: when.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", timeZone: "UTC" }),
-      timeLabel: parsed.time,
-      service: appointment.service?.name || "Serviço",
-      professional: appointment.professional?.name || "Profissional",
-      user: appointment.user?.user_name || "Cliente",
-    };
-  }, [appointment]);
+  const isReschedule = Boolean(route.params?.isReschedule);
+  const pending = appointment && appointment.status === "PENDING";
 
   useEffect(() => {
-    // Animação de entrada
     Animated.sequence([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 4,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 400,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]),
+      Animated.spring(scale, { toValue: 1, friction: 5, tension: 40, useNativeDriver: true }),
+      Animated.timing(fade, { toValue: 1, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [scale, fade]);
+
+  const title = isReschedule ? "Horário trocado" : pending ? "Agendamento enviado" : "Agendamento feito";
+  const subtitle = pending ? "A loja vai confirmar o seu horário." : isReschedule ? "O novo horário já está salvo." : "Seu horário está reservado.";
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: c.ground }]}>
       <View style={styles.content}>
-        {/* Success Icon */}
-        <Animated.View
-          style={[
-            styles.iconContainer,
-            { transform: [{ scale: scaleAnim }] },
-          ]}
-        >
-          <View style={styles.iconCircle}>
-            <MaterialIcons name="check" size={64} color="#FFF" />
-          </View>
+        <Animated.View style={[styles.badge, { backgroundColor: c.brand, transform: [{ scale }] }]}>
+          <Icon name="check" size={52} color={c.onBrand} />
         </Animated.View>
+        <Animated.View style={{ opacity: fade, alignItems: "center", width: "100%" }}>
+          <Text style={[styles.title, { color: c.ink }]}>{title}</Text>
+          <Text style={[styles.subtitle, { color: c.inkMuted }]}>{subtitle}</Text>
 
-        {/* Success Message */}
-        <Animated.View
-          style={[
-            styles.messageContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-        >
-          <Text style={styles.title}>
-            {route.params?.isReschedule ? "Horário Alterado com Sucesso!" : "Agendamento Confirmado!"}
-          </Text>
-          <Text style={styles.subtitle}>
-            {route.params?.isReschedule
-              ? "As alterações no seu agendamento foram salvas."
-              : "Seu horário foi reservado com sucesso."}
-          </Text>
-
-          {/* Appointment Details */}
-          {formatted && (
-            <View style={styles.detailsCard}>
-              <View style={styles.detailRow}>
-                <MaterialIcons name="event" size={20} color={theme.colors.primary} />
-                <Text style={styles.detailText}>{formatted.dateLabel}</Text>
+          {appointment ? (
+            <Card style={styles.card}>
+              <View style={styles.row}>
+                <Icon name="calendar" size={20} color={c.brand} />
+                <Text style={[styles.rowText, { color: c.ink }]}>{formatDay(appointment.local.date)}</Text>
               </View>
-              <View style={styles.detailRow}>
-                <MaterialIcons name="access-time" size={20} color={theme.colors.primary} />
-                <Text style={styles.detailText}>{formatted.timeLabel}</Text>
+              <View style={styles.row}>
+                <Icon name="clock" size={20} color={c.brand} />
+                <Text style={[styles.rowText, styles.time, { color: c.ink }]}>{appointment.local.start}</Text>
               </View>
-              <View style={styles.professionalProfileDivider} />
-              <View style={styles.professionalProfileCard}>
-                {appointment.professional ? (
-                  <Avatar source={appointment.professional.avatar_url} size="lg" name={formatted.professional} />
-                ) : (
-                  <View style={styles.placeholderAvatar}>
-                    <MaterialIcons name="person" size={28} color="#FFF" />
-                  </View>
-                )}
-                <View style={styles.professionalProfileInfo}>
-                  <Text style={styles.professionalGreeting}>Seu profissional</Text>
-                  <Text style={styles.professionalName}>{formatted.professional}</Text>
-                  <View style={styles.serviceTag}>
-                    <MaterialIcons name="content-cut" size={14} color={theme.colors.primary} />
-                    <Text style={styles.serviceTagText}>{formatted.service}</Text>
-                  </View>
+              <View style={[styles.divider, { backgroundColor: c.line }]} />
+              <View style={styles.row}>
+                <Avatar name={appointment.professional.name} size="lg" />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.small, { color: c.inkMuted }]}>Quem atende</Text>
+                  <Text style={[styles.pro, { color: c.ink }]}>{appointment.professional.name}</Text>
+                  <Text style={[styles.small, { color: c.inkMuted }]}>
+                    {appointment.items.map((item) => item.name).join(", ")} · {formatCents(appointment.totalCents)}
+                  </Text>
                 </View>
               </View>
-            </View>
-          )}
+            </Card>
+          ) : null}
         </Animated.View>
       </View>
 
-      {/* Bottom Button */}
-      <Animated.View
-        style={[
-          styles.buttonContainer,
-          {
-            paddingBottom: insets.bottom + 24,
-            opacity: fadeAnim,
-          },
-        ]}
-      >
-        <Button
-          title="Voltar ao Início"
-          onPress={() => navigation.goBack()}
-          fullWidth
-          size="lg"
-          icon={<MaterialIcons name="home" size={20} color="#FFF" />}
-        />
+      <Animated.View style={[styles.footer, { paddingBottom: insets.bottom + 24, opacity: fade }]}>
+        <Button title="Voltar ao início" onPress={() => navigation.goBack()} fullWidth size="lg" />
       </Animated.View>
     </View>
   );
 };
 
-const getStyles = (theme, isDarkMode) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.backgroundSecondary,
-  },
-  content: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-  },
-  iconContainer: {
-    marginBottom: 32,
-  },
-  iconCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: theme.colors.success,
-    alignItems: "center",
-    justifyContent: "center",
-    ...(isDarkMode ? {} : theme.shadows.lg),
-  },
-  messageContainer: {
-    alignItems: "center",
-    width: "100%",
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: theme.colors.textPrimary,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 16,
-    color: theme.colors.textMuted,
-    marginTop: 8,
-    textAlign: "center",
-  },
-  detailsCard: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.borderRadius.lg,
-    padding: 20,
-    width: "100%",
-    marginTop: 32,
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  detailText: {
-    fontSize: 16,
-    color: theme.colors.textPrimary,
-    marginLeft: 12,
-    fontWeight: "600",
-  },
-  professionalProfileDivider: {
-    height: 1,
-    backgroundColor: theme.colors.borderLight,
-    marginVertical: 16,
-  },
-  professionalProfileCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: theme.colors.card,
-    padding: 16,
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.borderLight,
-    ...(isDarkMode ? {} : {
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.05,
-      shadowRadius: 8,
-      elevation: 2,
-    }),
-  },
-  placeholderAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: theme.colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  professionalProfileInfo: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  professionalGreeting: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    textTransform: "uppercase",
-    fontWeight: "700",
-    letterSpacing: 0.5,
-  },
-  professionalName: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: theme.colors.textPrimary,
-    marginTop: 2,
-    marginBottom: 6,
-  },
-  serviceTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: theme.colors.primaryLight + "20",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: "flex-start",
-  },
-  serviceTagText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: theme.colors.primary,
-    marginLeft: 4,
-  },
-  pointsCard: {
-    backgroundColor: theme.colors.pointsBackground,
-    borderRadius: theme.borderRadius.lg,
-    padding: 20,
-    width: "100%",
-    marginTop: 16,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: theme.colors.points + "50",
-  },
-  pointsTitle: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-  },
-  pointsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 8,
-  },
-  pointsEmoji: {
-    fontSize: 28,
-    marginRight: 8,
-  },
-  pointsAmount: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: theme.colors.textPrimary,
-  },
-  pointsLabel: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-    marginLeft: 8,
-  },
-  pointsHint: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    marginTop: 8,
-  },
-  buttonContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.borderLight,
-  },
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  content: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
+  badge: { width: 112, height: 112, borderRadius: 56, alignItems: "center", justifyContent: "center", marginBottom: 28 },
+  title: { ...type.title, textAlign: "center" },
+  subtitle: { ...type.body, marginTop: 8, textAlign: "center" },
+  card: { width: "100%", marginTop: 28, padding: 18 },
+  row: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  rowText: { ...type.bodyStrong, marginLeft: 10, textTransform: "capitalize" },
+  time: { ...type.time, fontSize: 16, textTransform: "none" },
+  divider: { height: 1, marginVertical: 6, marginBottom: 14 },
+  small: { ...type.small },
+  pro: { fontFamily: fonts.textBold, fontSize: 17, lineHeight: 22 },
+  footer: { paddingHorizontal: 24 },
 });
 
 export default AppointmentSuccessScreen;

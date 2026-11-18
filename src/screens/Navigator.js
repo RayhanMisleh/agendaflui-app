@@ -14,7 +14,7 @@ import { fonts, radius } from "../theme/tokens";
 
 // Telas
 import AgendarScreen from "./agendar/AgendarScreen";
-import PerfilScreen from "./PerfilScreen";
+import PerfilScreen from "./perfil/PerfilScreen";
 import AppointmentSuccessScreen from "./AppointmentSuccessScreen";
 import HistoricoAgendamentosScreen from "./HistoricoAgendamentosScreen";
 import AlterarSenhaScreen from "./AlterarSenhaScreen";

@@ -140,6 +140,27 @@ describe("leaveBusiness (trocar ou perder a loja)", () => {
     expect(logout[0].headers.authorization).toBeUndefined();
   });
 
+  test("tira o aparelho de push antes de apagar os tokens (a chamada ainda precisa da sessão)", async () => {
+    const c = await loggedIn();
+    let tokenDuringPush = "não rodou";
+    const clearPush = jest.fn(async () => {
+      tokenDuringPush = c.tokens.get();
+    });
+    await leaveBusiness({ http: c.http, slug: "patas", tokens: c.tokens, businessStore: c.store, clearCart: async () => {}, clearPush });
+    expect(tokenDuringPush).toEqual(T1);
+    expect(c.tokens.get()).toBeNull();
+  });
+
+  test("falha ao tirar o aparelho não impede a saída", async () => {
+    const c = await loggedIn();
+    const clearPush = jest.fn(async () => {
+      throw new Error("sem rede");
+    });
+    await leaveBusiness({ http: c.http, slug: "patas", tokens: c.tokens, businessStore: c.store, clearCart: async () => {}, clearPush });
+    expect(c.tokens.get()).toBeNull();
+    expect(c.businessStorage.dump()).toEqual({});
+  });
+
   test("não espera a revogação e ignora a falha dela", async () => {
     const c = makeClient(
       async () => {

@@ -24,7 +24,7 @@ describe("manifesto de rotas", () => {
   test("listas fixas", () => {
     expect(ROOT_ROUTES).toEqual([
       "CodigoLoja", "Intro", "Navigator", "Login", "SignUp", "RecuperarSenha",
-      "NewUserEmailCode", "ConfirmarExclusaoCode",
+      "NewUserEmailCode", "ConfirmarExclusao",
     ]);
     expect(TAB_ROUTES).toEqual(["Agendar", "Loja", "Perfil"]);
     expect(MAIN_STACK_ROUTES).toEqual([
@@ -39,7 +39,7 @@ describe("manifesto de rotas", () => {
   test("ROUTES: valor igual ao nome", () => {
     expect(Object.keys(ROUTES)).toEqual([
       "CodigoLoja", "Intro", "Navigator", "Login", "SignUp", "RecuperarSenha",
-      "NewUserEmailCode", "ConfirmarExclusaoCode", "MainTabs", "Agendar", "Loja",
+      "NewUserEmailCode", "ConfirmarExclusao", "MainTabs", "Agendar", "Loja",
       "Perfil", "AppointmentSuccess", "HistoricoAgendamentos", "AlterarSenha",
       "MeusPedidos", "Carrinho", "PrizeScanner", "RedemptionSuccess", "MinhaJornada",
       "ProductsList", "SingleProduct", "MeusPedidosList", "PedidoDetalhes",

@@ -2,9 +2,13 @@ import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
-import api from "../api/apiConfig";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { api } from "../api";
 
-// Configurar como as notificações são exibidas quando o app está em foreground
+// Só o token do aparelho (não é segredo de sessão) fica no AsyncStorage, para poder tirá-lo da loja ao sair.
+export const PUSH_TOKEN_KEY = "agendaflui.pushToken";
+
+// Como as notificações aparecem com o app aberto.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -15,101 +19,75 @@ Notifications.setNotificationHandler({
   }),
 });
 
-/**
- * Registra o dispositivo para push notifications e retorna o ExpoPushToken.
- */
-export async function registerForPushNotificationsAsync() {
-  let token = null;
-
-  // Push notifications só funcionam em dispositivos físicos
-  if (!Device.isDevice) {
-    return null;
-  }
-
-  // Configurar canal de notificação no Android
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("appointment-reminders", {
-      name: "Lembretes de Agendamento",
-      description: "Notificações de lembrete antes dos seus agendamentos",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#0B6E66",
-      sound: "default",
-      enableVibrate: true,
-      showBadge: true,
-    });
-
-    await Notifications.setNotificationChannelAsync("default", {
-      name: "Notificações Gerais",
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#0B6E66",
-      sound: "default",
-    });
-  }
-
-  // Verificar/solicitar permissões
-  const { status: existingStatus } =
-    await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-
-  if (existingStatus !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== "granted") {
-    return null;
-  }
-
-  // Obter token
-  try {
-    const projectId =
-      Constants?.expoConfig?.extra?.eas?.projectId ??
-      Constants?.easConfig?.projectId;
-
-    if (!projectId) {
-      return null;
-    }
-
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId,
-    });
-    token = tokenData.data;
-  } catch (error) {
-    console.error("❌ Erro ao obter ExpoPushToken:", error);
-    return null;
-  }
-
-  return token;
+async function setupAndroidChannels() {
+  await Notifications.setNotificationChannelAsync("appointment-reminders", {
+    name: "Lembretes de agendamento",
+    description: "Avisos antes dos seus horários",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: "#0B6E66",
+    sound: "default",
+    enableVibrate: true,
+    showBadge: true,
+  });
+  await Notifications.setNotificationChannelAsync("default", {
+    name: "Avisos gerais",
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: "#0B6E66",
+    sound: "default",
+  });
 }
 
-/**
- * Envia o push token para o backend para ser associado ao usuário.
- */
-export async function sendPushTokenToServer(pushToken) {
+// Pede permissão e devolve o ExpoPushToken. Sem aparelho de verdade, permissão ou projectId do EAS: null, sem erro.
+async function getPushToken() {
+  if (!Device.isDevice) return null;
+  if (Platform.OS === "android") await setupAndroidChannels();
+
+  const existing = await Notifications.getPermissionsAsync();
+  let status = existing.status;
+  if (status !== "granted") {
+    status = (await Notifications.requestPermissionsAsync()).status;
+  }
+  if (status !== "granted") return null;
+
+  const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
+  if (!projectId) return null;
+
+  const data = await Notifications.getExpoPushTokenAsync({ projectId });
+  return data.data || null;
+}
+
+// Registra o aparelho na loja atual (o servidor aceita repetição). Nunca lança: push não pode travar o app.
+export async function registerDevice() {
+  try {
+    const pushToken = await getPushToken();
+    if (!pushToken) return null;
+    await api.http.post("/me/devices", { platform: Platform.OS, pushToken });
+    await AsyncStorage.setItem(PUSH_TOKEN_KEY, pushToken);
+    return pushToken;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Tira o aparelho do cliente na loja atual e esquece o token. Sem token guardado, nem toca a rede.
+export async function unregisterDevice() {
+  let pushToken = null;
+  try {
+    pushToken = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+  } catch (error) {
+    return;
+  }
   if (!pushToken) return;
-
   try {
-    await api.post("/user/push-token", {
-      push_token: pushToken,
-    });
+    await api.http.delete(`/me/devices/${encodeURIComponent(pushToken)}`, { timeout: 5000 });
   } catch (error) {
-    console.error(
-      "❌ Erro ao enviar push token para o servidor:",
-      error?.response?.data || error.message
-    );
+    // sem rede ou sessão vencida: o servidor passa o token ao próximo cliente que o registrar
   }
-}
-
-/**
- * Inicializa o sistema de notificações completo.
- * Deve ser chamado após o login bem-sucedido.
- */
-export async function initializeNotifications() {
-  const token = await registerForPushNotificationsAsync();
-  if (token) {
-    await sendPushTokenToServer(token);
+  try {
+    await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
+  } catch (error) {
+    // sem armazenamento: nada a fazer
   }
-  return token;
 }

@@ -4,6 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api, sessionTokens, setActiveSlug, setSessionHandlers } from "../api";
 import { fetchBusiness } from "../api/business";
 import { CartService } from "../services/cartService";
+import { unregisterDevice } from "../services/notificationService";
 import { createBusinessStore } from "./businessStore";
 import { decideStoreSwitch, parseStoreLink } from "./storeLink";
 import { leaveBusiness } from "./switching";
@@ -94,7 +95,7 @@ export function BusinessProvider({ children }) {
       tokens: sessionTokens,
       businessStore,
       clearCart: () => CartService.clearAllCart(), // a Tarefa 6 troca por clearCartFor(slug)
-      // a Tarefa 4 pluga aqui o unregisterDevice (aparelho de push da loja)
+      clearPush: unregisterDevice, // o aparelho sai da loja antes de a sessão acabar
     });
   }, []);
 

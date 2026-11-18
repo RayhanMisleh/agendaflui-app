@@ -25,12 +25,12 @@ import LoginScreen from "./src/screens/LoginScreen";
 import SignUpScreen from "./src/screens/SignUpScreen";
 import RecuperarSenhaScreen from "./src/screens/RecuperarSenhaScreen";
 import NewUserEmailCodeScreen from "./src/screens/NewUserEmailCodeScreen";
-import ConfirmarExclusaoCodeScreen from "./src/screens/ConfirmarExclusaoCodeScreen";
+import ConfirmarExclusaoScreen from "./src/screens/ConfirmarExclusaoScreen";
 import { AuthProvider, useAuth } from "./src/components/AuthProvider";
 import { BusinessProvider, useBusiness } from "./src/business/BusinessProvider";
 import LoadingScreen from "./src/components/LoadingScreen";
 import Button from "./src/components/ui/Button";
-import { initializeNotifications } from "./src/services/notificationService";
+import { registerDevice } from "./src/services/notificationService";
 import { ThemeProvider, useTheme } from "./src/utils/ThemeContext";
 import { ROUTES } from "./src/navigation/routes";
 import { colors, type } from "./src/theme/tokens";
@@ -60,7 +60,8 @@ const styles = StyleSheet.create({
 
 const RootNavigator = () => {
   const { isAuthenticated, isLoading } = useAuth();
-  const { status } = useBusiness();
+  const { status, business } = useBusiness();
+  const storeName = business ? business.name : "Agenda Flui";
   const { theme } = useTheme();
   const { isDarkMode } = theme;
   const notificationListener = useRef();
@@ -69,7 +70,8 @@ const RootNavigator = () => {
   // Inicializar push notifications quando o usuário estiver autenticado
   useEffect(() => {
     if (isAuthenticated) {
-      initializeNotifications().catch(() => {});
+      // O servidor aceita o mesmo aparelho de novo; sem projectId do EAS ou em simulador, não registra e não mostra erro.
+      registerDevice();
 
       // Listener para notificações recebidas em foreground
       notificationListener.current =
@@ -78,8 +80,8 @@ const RootNavigator = () => {
           // Mostrar toast quando a notificação chegar com o app aberto
           Toast.show({
             type: "info",
-            text1: title || "Agenda Flui",
-            text2: body || "",
+            text1: storeName,
+            text2: [title, body].filter(Boolean).join(": "),
             visibilityTime: 5000,
             topOffset: 60,
           });
@@ -104,7 +106,7 @@ const RootNavigator = () => {
         responseListener.current.remove();
       }
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, storeName]);
 
   // Disable zoom and scroll bounce on web, and fix root background color
   useEffect(() => {
@@ -171,7 +173,7 @@ const RootNavigator = () => {
           <Stack.Screen name={ROUTES.SignUp} component={SignUpScreen} />
           <Stack.Screen name={ROUTES.RecuperarSenha} component={RecuperarSenhaScreen} />
           <Stack.Screen name={ROUTES.NewUserEmailCode} component={NewUserEmailCodeScreen} />
-          <Stack.Screen name={ROUTES.ConfirmarExclusaoCode} component={ConfirmarExclusaoCodeScreen} />
+          <Stack.Screen name={ROUTES.ConfirmarExclusao} component={ConfirmarExclusaoScreen} />
         </>
       )}
     </Stack.Navigator>
