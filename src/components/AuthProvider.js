@@ -1,10 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { checkAuthToken } from "../api/authApi";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { api, sessionTokens, setSessionHandlers } from "../api";
+import { useBusiness } from "../business/BusinessProvider";
 
-// Criar contexto de autenticação
 const AuthContext = createContext();
 
-// Hook para usar o contexto de autenticação
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -13,43 +12,66 @@ export const useAuth = () => {
   return context;
 };
 
-// Provider de autenticação
+// Sessão do cliente na loja atual. A sessão só vale para a loja em que os tokens foram gravados.
 export const AuthProvider = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const { slug, status } = useBusiness();
+  const [session, setSession] = useState({ slug: null, authenticated: false, customer: null });
 
-  // Verificar se o usuário está logado ao inicializar
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        setIsLoading(true);
-        const isLoggedIn = await checkAuthToken();
-        setIsAuthenticated(isLoggedIn || false);
-      } catch (error) {
-        console.error("Erro ao verificar autenticação:", error);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
-      }
+    let cancelled = false;
+    if (!slug) {
+      setSession({ slug: null, authenticated: false, customer: null });
+      return undefined;
+    }
+    sessionTokens.load(slug).then((tokens) => {
+      if (!cancelled) setSession({ slug, authenticated: Boolean(tokens), customer: null });
+    });
+    return () => {
+      cancelled = true;
     };
+  }, [slug]);
 
-    initAuth();
+  // A renovação falhou: o cliente da API já apagou os tokens; aqui só a tela volta a visitante.
+  useEffect(() => {
+    setSessionHandlers({
+      onSessionEnded: () => setSession((s) => ({ ...s, authenticated: false, customer: null })),
+    });
   }, []);
 
-  const login = () => {
-    setIsAuthenticated(true);
-  };
+  const startSession = useCallback(
+    async ({ tokens, customer }) => {
+      await sessionTokens.set(tokens);
+      setSession({ slug, authenticated: true, customer: customer || null });
+    },
+    [slug]
+  );
 
-  const logout = () => {
-    setIsAuthenticated(false);
-  };
+  const endSession = useCallback(async () => {
+    const tokens = sessionTokens.get();
+    if (tokens && tokens.refreshToken && slug) {
+      // sem esperar: sair não depende da rede (X-Business explícito, a loja pode mudar logo em seguida)
+      api.http
+        .post("/auth/customer/logout", { refreshToken: tokens.refreshToken }, { headers: { "X-Business": slug } })
+        .catch(() => {});
+    }
+    await sessionTokens.clear();
+    setSession({ slug, authenticated: false, customer: null });
+  }, [slug]);
 
-  const value = {
-    isAuthenticated,
-    isLoading,
-    login,
-    logout,
-  };
+  const settled = session.slug === slug;
+  const value = useMemo(
+    () => ({
+      isAuthenticated: settled && session.authenticated,
+      isLoading: status === "loading" || (slug !== null && !settled),
+      customer: settled ? session.customer : null,
+      startSession,
+      endSession,
+      // Nomes antigos que as telas de entrada e o perfil ainda usam até as tarefas 3 e 4.
+      login: () => {},
+      logout: endSession,
+    }),
+    [settled, session, status, slug, startSession, endSession]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

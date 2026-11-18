@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { signUp } from "../api/authApi";
 import { validateEmail } from "../utils/helpers";
 import { useTheme } from "../utils/ThemeContext";
-import { config } from "../utils/config";
+import { config } from "../config";
 
 export default function SignUpScreen({ navigation }) {
   const { theme } = useTheme();
@@ -298,12 +298,12 @@ export default function SignUpScreen({ navigation }) {
               </TouchableOpacity>
 
               {/* Privacy notice (discreet & sophisticated) */}
-              {config.PRIVACY_POLICY_URL ? (
+              {config.privacyUrl ? (
                 <Text style={styles.privacyText}>
                   Ao continuar, você concorda com nossa{" "}
                   <Text
                     style={styles.privacyLink}
-                    onPress={() => Linking.openURL(config.PRIVACY_POLICY_URL)}
+                    onPress={() => Linking.openURL(config.privacyUrl)}
                   >
                     Política de Privacidade
                   </Text>

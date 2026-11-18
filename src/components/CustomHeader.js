@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { View, Image, StyleSheet, TouchableOpacity, Text, Platform } from "react-native";
+import { View, StyleSheet, TouchableOpacity, Text, Platform } from "react-native";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { useTheme } from "../utils/ThemeContext";
-import Logo from "../../assets/logo-horizontal.png";
-import LogoNegativo from "../../assets/logo-horizontal-negativo.png";
+import BrandLogo from "./ui/BrandLogo";
 import { CartService } from "../services/cartService";
 import CarrinhoComponent from "./CarrinhoComponent";
 import { useNavigation } from "@react-navigation/native";
@@ -74,11 +73,7 @@ const CustomHeader = () => {
         </View>
 
         <View style={styles.logoContainer}>
-          <Image
-            source={theme.isDarkMode ? LogoNegativo : Logo}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          <BrandLogo style={styles.logo} />
         </View>
 
         <View style={[styles.sideContainer, { alignItems: "flex-end" }]}>

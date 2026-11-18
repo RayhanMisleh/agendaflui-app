@@ -9,7 +9,7 @@ const names = [
 
 export const ROUTES = Object.freeze(Object.fromEntries(names.map((n) => [n, n])));
 
-export const ROOT_ROUTES = ["Intro", "Navigator", "Login", "SignUp", "RecuperarSenha", "NewUserEmailCode", "ConfirmarExclusaoCode"];
+export const ROOT_ROUTES = ["CodigoLoja", "Intro", "Navigator", "Login", "SignUp", "RecuperarSenha", "NewUserEmailCode", "ConfirmarExclusaoCode"];
 export const TAB_ROUTES = ["Agendar", "Loja", "Perfil"];
 export const MAIN_STACK_ROUTES = ["MainTabs", "AppointmentSuccess", "HistoricoAgendamentos", "AlterarSenha", "MeusPedidos", "Carrinho", "PrizeScanner", "RedemptionSuccess", "MinhaJornada"];
 export const PRODUCTS_STACK_ROUTES = ["ProductsList", "SingleProduct"];

@@ -17,7 +17,8 @@ import {
   Figtree_700Bold,
 } from "@expo-google-fonts/figtree";
 
-import { Platform } from "react-native";
+import { Platform, View, Text, StyleSheet } from "react-native";
+import CodigoLojaScreen from "./src/screens/CodigoLojaScreen";
 import IntroScreen from "./src/screens/IntroScreen";
 import Navigator from "./src/screens/Navigator";
 import LoginScreen from "./src/screens/LoginScreen";
@@ -26,18 +27,40 @@ import RecuperarSenhaScreen from "./src/screens/RecuperarSenhaScreen";
 import NewUserEmailCodeScreen from "./src/screens/NewUserEmailCodeScreen";
 import ConfirmarExclusaoCodeScreen from "./src/screens/ConfirmarExclusaoCodeScreen";
 import { AuthProvider, useAuth } from "./src/components/AuthProvider";
+import { BusinessProvider, useBusiness } from "./src/business/BusinessProvider";
 import LoadingScreen from "./src/components/LoadingScreen";
+import Button from "./src/components/ui/Button";
 import { initializeNotifications } from "./src/services/notificationService";
 import { ThemeProvider, useTheme } from "./src/utils/ThemeContext";
 import { ROUTES } from "./src/navigation/routes";
-import { colors } from "./src/theme/tokens";
+import { colors, type } from "./src/theme/tokens";
 
 import Toast from "react-native-toast-message";
 
 const Stack = createStackNavigator();
 
+// A loja escolhida não responde (suspensa ou sem rede e sem dados guardados).
+const LojaIndisponivel = () => {
+  const { theme } = useTheme();
+  const { reload, switchBusiness } = useBusiness();
+  return (
+    <View style={[styles.unavailable, { backgroundColor: theme.colors.ground }]}>
+      <Text style={[styles.unavailableTitle, { color: theme.colors.ink }]}>Esta loja não está disponível agora.</Text>
+      <Button title="Tentar de novo" onPress={reload} fullWidth style={styles.unavailableButton} />
+      <Button title="Escolher outra loja" variant="outline" onPress={switchBusiness} fullWidth style={styles.unavailableButton} />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  unavailable: { flex: 1, justifyContent: "center", padding: 24 },
+  unavailableTitle: { ...type.h2, marginBottom: 24 },
+  unavailableButton: { marginTop: 12 },
+});
+
 const RootNavigator = () => {
   const { isAuthenticated, isLoading } = useAuth();
+  const { status } = useBusiness();
   const { theme } = useTheme();
   const { isDarkMode } = theme;
   const notificationListener = useRef();
@@ -115,6 +138,10 @@ const RootNavigator = () => {
     return <LoadingScreen />;
   }
 
+  if (status === "unavailable") {
+    return <LojaIndisponivel />;
+  }
+
   return (
     <>
     <Stack.Navigator 
@@ -134,13 +161,19 @@ const RootNavigator = () => {
       }} 
       initialRouteName={Platform.OS === "web" && !isAuthenticated ? ROUTES.Intro : ROUTES.Navigator}
     >
-      {Platform.OS === "web" && <Stack.Screen name={ROUTES.Intro} component={IntroScreen} />}
-      <Stack.Screen name={ROUTES.Navigator} component={Navigator} />
-      <Stack.Screen name={ROUTES.Login} component={LoginScreen} />
-      <Stack.Screen name={ROUTES.SignUp} component={SignUpScreen} />
-      <Stack.Screen name={ROUTES.RecuperarSenha} component={RecuperarSenhaScreen} />
-      <Stack.Screen name={ROUTES.NewUserEmailCode} component={NewUserEmailCodeScreen} />
-      <Stack.Screen name={ROUTES.ConfirmarExclusaoCode} component={ConfirmarExclusaoCodeScreen} />
+      {status === "none" ? (
+        <Stack.Screen name={ROUTES.CodigoLoja} component={CodigoLojaScreen} />
+      ) : (
+        <>
+          {Platform.OS === "web" && <Stack.Screen name={ROUTES.Intro} component={IntroScreen} />}
+          <Stack.Screen name={ROUTES.Navigator} component={Navigator} />
+          <Stack.Screen name={ROUTES.Login} component={LoginScreen} />
+          <Stack.Screen name={ROUTES.SignUp} component={SignUpScreen} />
+          <Stack.Screen name={ROUTES.RecuperarSenha} component={RecuperarSenhaScreen} />
+          <Stack.Screen name={ROUTES.NewUserEmailCode} component={NewUserEmailCodeScreen} />
+          <Stack.Screen name={ROUTES.ConfirmarExclusaoCode} component={ConfirmarExclusaoCodeScreen} />
+        </>
+      )}
     </Stack.Navigator>
     <StatusBar style={isDarkMode ? "light" : "dark"} backgroundColor="transparent" translucent={true} />
     </>
@@ -169,17 +202,19 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.light.ground }}>
       <SafeAreaProvider style={{ backgroundColor: colors.light.ground }}>
         <ThemeProvider>
-          <AuthProvider>
-            <NavigationContainer
-              documentTitle={{
-                formatter: () => "Agenda Flui",
-              }}
-            >
-              <RootNavigator />
-            </NavigationContainer>
+          <BusinessProvider>
+            <AuthProvider>
+              <NavigationContainer
+                documentTitle={{
+                  formatter: () => "Agenda Flui",
+                }}
+              >
+                <RootNavigator />
+              </NavigationContainer>
 
-            <Toast />
-          </AuthProvider>
+              <Toast />
+            </AuthProvider>
+          </BusinessProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

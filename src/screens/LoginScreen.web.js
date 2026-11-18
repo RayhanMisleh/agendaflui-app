@@ -14,7 +14,7 @@ import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { login } from "../api/authApi";
 import { useAuth } from "../components/AuthProvider";
 import { useTheme } from "../utils/ThemeContext";
-import { config } from "../utils/config";
+import { config } from "../config";
 
 export default function LoginScreen({ navigation }) {
   const { theme } = useTheme();
@@ -129,12 +129,12 @@ export default function LoginScreen({ navigation }) {
             </TouchableOpacity>
 
             {/* Privacy notice */}
-            {config?.PRIVACY_POLICY_URL ? (
+            {config?.privacyUrl ? (
               <Text style={styles.privacyText}>
                 Ao continuar, você concorda com nossa{" "}
                 <Text
                   style={styles.privacyLink}
-                  onPress={() => Linking.openURL(config.PRIVACY_POLICY_URL)}
+                  onPress={() => Linking.openURL(config.privacyUrl)}
                 >
                   Política de Privacidade
                 </Text>

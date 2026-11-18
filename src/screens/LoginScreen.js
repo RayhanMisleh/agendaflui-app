@@ -19,7 +19,7 @@ import { login } from "../api/authApi";
 import { useAuth } from "../components/AuthProvider";
 import { validateEmail } from "../utils/helpers";
 import { theme, createButtonStyle, createTextStyle } from "../utils/theme";
-import { config } from "../utils/config";
+import { config } from "../config";
 import { useTheme } from "../utils/ThemeContext";
 
 export default function LoginScreen({ navigation }) {
@@ -191,12 +191,12 @@ export default function LoginScreen({ navigation }) {
               </TouchableOpacity>
 
               {/* Privacy notice */}
-              {config.PRIVACY_POLICY_URL ? (
+              {config.privacyUrl ? (
                 <Text style={styles.privacyText}>
                   Ao continuar, você concorda com nossa{" "}
                   <Text
                     style={styles.privacyLink}
-                    onPress={() => Linking.openURL(config.PRIVACY_POLICY_URL)}
+                    onPress={() => Linking.openURL(config.privacyUrl)}
                   >
                     Política de Privacidade
                   </Text>

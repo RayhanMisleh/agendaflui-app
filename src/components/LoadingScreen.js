@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
-import { View, StyleSheet, Animated, Easing, Dimensions, ActivityIndicator, Image } from "react-native";
+import { View, StyleSheet, Animated, Easing, Dimensions, ActivityIndicator } from "react-native";
+import BrandLogo from "./ui/BrandLogo";
 import { useTheme } from "../utils/ThemeContext";
 
 const { width } = Dimensions.get("window");
@@ -31,14 +32,10 @@ export default function LoadingScreen() {
     return () => loop.stop();
   }, [pulseAnim]);
 
-  const logo = theme.isDarkMode
-    ? require("../../assets/logo-horizontal-negativo.png")
-    : require("../../assets/logo-horizontal.png");
-
   return (
     <View style={styles.container}>
       <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-        <Image source={logo} style={styles.logo} resizeMode="contain" />
+        <BrandLogo style={styles.logo} />
       </Animated.View>
       <ActivityIndicator size="small" color={theme.colors.primary} style={styles.loader} />
     </View>

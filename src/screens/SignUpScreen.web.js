@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { signUp } from "../api/authApi";
-import { config } from "../utils/config";
+import { config } from "../config";
 import { Linking } from "react-native";
 import { useTheme } from "../utils/ThemeContext";
 
@@ -157,12 +157,12 @@ export default function SignUpScreen({ navigation }) {
             </TouchableOpacity>
 
             {/* Privacy notice */}
-            {config?.PRIVACY_POLICY_URL ? (
+            {config?.privacyUrl ? (
               <Text style={styles.privacyText}>
                 Ao continuar, você concorda com nossa{" "}
                 <Text
                   style={styles.privacyLink}
-                  onPress={() => Linking.openURL(config.PRIVACY_POLICY_URL)}
+                  onPress={() => Linking.openURL(config.privacyUrl)}
                 >
                   Política de Privacidade
                 </Text>

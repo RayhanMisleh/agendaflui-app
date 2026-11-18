@@ -23,7 +23,7 @@ const sequence = (file, component) => {
 describe("manifesto de rotas", () => {
   test("listas fixas", () => {
     expect(ROOT_ROUTES).toEqual([
-      "Intro", "Navigator", "Login", "SignUp", "RecuperarSenha",
+      "CodigoLoja", "Intro", "Navigator", "Login", "SignUp", "RecuperarSenha",
       "NewUserEmailCode", "ConfirmarExclusaoCode",
     ]);
     expect(TAB_ROUTES).toEqual(["Agendar", "Loja", "Perfil"]);

@@ -1,5 +1,5 @@
 import api from "./apiConfig";
-import { config } from "../utils/config";
+import { config } from "../config";
 
 // Criar pagamento
 export const createPayment = async (paymentData) => {
@@ -95,6 +95,6 @@ export const PAYMENT_METHODS = {
 
 // Helper para obter URL base da API para webhook
 export const getNotificationUrl = () => {
-  const baseUrl = config.API_BASE_URL.replace(/\/$/, "");
+  const baseUrl = config.apiUrl.replace(/\/$/, "");
   return `${baseUrl}/webhook/mercadopago`;
 };

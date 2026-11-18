@@ -26,7 +26,7 @@ import { getProfile, uploadAvatar, updateProfile, getMyRedemptions, getRanking }
 import { useAuth } from "../components/AuthProvider";
 import { CartService } from "../services/cartService";
 import { theme, createTextStyle, createButtonStyle } from "../utils/theme";
-import { config } from "../utils/config";
+import { config } from "../config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../utils/ThemeContext";
 import Skeleton from "../components/ui/Skeleton";
@@ -41,7 +41,7 @@ const Watermark = ({ styles }) => {
 
       <TouchableOpacity
         activeOpacity={0.6}
-        onPress={() => Linking.openURL(config.BRAND_URL)}
+        onPress={() => Linking.openURL(config.siteUrl)}
       >
         <Text style={styles.watermarkLinkText}>Feito com Agenda Flui</Text>
       </TouchableOpacity>
@@ -337,15 +337,15 @@ const PerfilScreen = ({ navigation }) => {
           <Text style={[styles.sectionLabel, { marginTop: 24 }]}>Informações</Text>
           <View style={[styles.menuList, { width: '100%' }]}>
             {renderMenuItem("policy", "Política de Privacidade", () =>
-              openExternalLink(config.PRIVACY_POLICY_URL)
+              openExternalLink(config.privacyUrl)
             )}
             {renderSeparator()}
             {renderMenuItem("gavel", "Termos de Uso", () =>
-              openExternalLink(config.TERMS_OF_USE_URL)
+              openExternalLink(config.termsUrl)
             )}
             {renderSeparator()}
             {renderMenuItem("support-agent", "Suporte", () =>
-              openExternalLink(config.SUPPORT_URL)
+              openExternalLink(`${config.siteUrl}/contato`)
             )}
           </View>
 
@@ -593,15 +593,15 @@ const PerfilScreen = ({ navigation }) => {
         <Text style={styles.sectionLabel}>Informações</Text>
         <View style={styles.menuList}>
           {renderMenuItem("policy", "Política de Privacidade", () =>
-            openExternalLink(config.PRIVACY_POLICY_URL)
+            openExternalLink(config.privacyUrl)
           )}
           {renderSeparator()}
           {renderMenuItem("gavel", "Termos de Uso", () =>
-            openExternalLink(config.TERMS_OF_USE_URL)
+            openExternalLink(config.termsUrl)
           )}
           {renderSeparator()}
           {renderMenuItem("support-agent", "Suporte", () =>
-            openExternalLink(config.SUPPORT_URL)
+            openExternalLink(`${config.siteUrl}/contato`)
           )}
         </View>
 
