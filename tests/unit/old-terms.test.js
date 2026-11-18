@@ -26,9 +26,18 @@ const offenders = (file) => {
 };
 
 describe("termos antigos", () => {
+  test("README e AGENTS descrevem o AgendaFlui e não apontam para ../site", () => {
+    for (const f of ["README.md", "AGENTS.md"]) {
+      const text = fs.readFileSync(path.join(root, f), "utf8");
+      expect(text).not.toContain("../site");
+      expect(text).toMatch(/agendaflui/i);
+    }
+    expect(fs.readFileSync(path.join(root, "README.md"), "utf8")).toContain("EXPO_PUBLIC_APP_KEY");
+  });
+
   test("nenhum termo antigo no código, na configuração e nos nomes dos assets", () => {
     const files = [
-      "App.js", "index.js", "app.json", "eas.json", "package.json",
+      "App.js", "index.js", "app.json", "eas.json", "package.json", "README.md", "AGENTS.md",
     ].filter(exists).map((f) => path.join(root, f));
     if (exists("src")) {
       files.push(...walk(path.join(root, "src")).filter((f) => TEXT_EXT.test(f)));

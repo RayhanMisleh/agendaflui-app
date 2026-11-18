@@ -125,13 +125,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   initials: {
-    color: "#FFFFFF",
+    color: theme.colors.onBrand,
     fontWeight: "600",
   },
   status: {
     position: "absolute",
     borderWidth: 2,
-    borderColor: "#FFFFFF",
+    borderColor: theme.colors.surface,
   },
 });
 
