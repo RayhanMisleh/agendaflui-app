@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../utils/ThemeContext";
+import { useReduceMotion, stackScreenOptions } from "../utils/motion";
 import { useBusiness } from "../business/BusinessProvider";
 import { ROUTES } from "../navigation/routes";
 import Icon from "../components/ui/Icon";
@@ -78,10 +79,11 @@ function StaffTabs() {
 // Área da equipe: só o dia a dia (agenda, atendimento, bloqueio, cliente, perfil). Gestão fica no painel.
 export default function StaffNavigator() {
   const { theme } = useTheme();
+  const reduceMotion = useReduceMotion();
   const { status } = useStaffSession();
   if (status !== "ready") return <LoadingScreen />;
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false, cardStyle: { backgroundColor: theme.colors.ground } }}>
+    <Stack.Navigator screenOptions={{ ...stackScreenOptions({ platform: Platform.OS, reduceMotion }), cardStyle: { backgroundColor: theme.colors.ground } }}>
       <Stack.Screen name={ROUTES.EquipeTabs} component={StaffTabs} />
       <Stack.Screen name={ROUTES.Atendimento} component={AtendimentoScreen} />
       <Stack.Screen name={ROUTES.Remarcar} component={RemarcarScreen} />

@@ -8,6 +8,7 @@ import {
   SafeAreaView,
 } from "react-native-safe-area-context";
 import { useTheme } from "../utils/ThemeContext";
+import { useReduceMotion, stackScreenOptions } from "../utils/motion";
 import { useBusiness } from "../business/BusinessProvider";
 import { ROUTES } from "../navigation/routes";
 import Icon from "../components/ui/Icon";
@@ -110,6 +111,7 @@ const MainTabs = () => {
 // Main Navigator with Stack for modals/success screens
 const Navigator = () => {
   const { theme } = useTheme();
+  const reduceMotion = useReduceMotion();
   const styles = getStyles(theme);
 
   return (
@@ -117,8 +119,7 @@ const Navigator = () => {
       <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <Stack.Navigator
           screenOptions={{
-            headerShown: false,
-            animationEnabled: Platform.OS !== 'android',
+            ...stackScreenOptions({ platform: Platform.OS, reduceMotion }),
             cardStyle: { backgroundColor: theme.colors.background },
           }}
         >

@@ -37,6 +37,7 @@ import Button from "./src/components/ui/Button";
 import { registerDevice } from "./src/services/notificationService";
 import { useOrderLink } from "./src/store/useOrderLink";
 import { ThemeProvider, useTheme } from "./src/utils/ThemeContext";
+import { useReduceMotion, stackScreenOptions } from "./src/utils/motion";
 import { ROUTES, initialRootRoute } from "./src/navigation/routes";
 import { colors, type } from "./src/theme/tokens";
 import { clearLegacyStorage } from "./src/session/legacy";
@@ -80,6 +81,7 @@ const RootNavigator = () => {
   const storeName = business ? business.name : "Agenda Flui";
   const { theme } = useTheme();
   const { isDarkMode } = theme;
+  const reduceMotion = useReduceMotion();
   const notificationListener = useRef();
   const responseListener = useRef();
 
@@ -194,21 +196,8 @@ const RootNavigator = () => {
 
   return (
     <>
-    <Stack.Navigator 
-      screenOptions={{ 
-        headerShown: false,
-        animationEnabled: Platform.OS !== 'android',
-        ...(Platform.OS === 'web' && {
-          cardStyleInterpolator: ({ current: { progress } }) => ({
-            cardStyle: {
-              opacity: progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 1],
-              }),
-            },
-          }),
-        }),
-      }} 
+    <Stack.Navigator
+      screenOptions={stackScreenOptions({ platform: Platform.OS, reduceMotion })}
       // A pilha recomeça ao escolher ou trocar de loja: as telas mudam e a primeira tela precisa existir.
       key={isStaff ? "equipe" : status === "none" ? "sem-loja" : "com-loja"}
       initialRouteName={initialRootRoute({ platform: Platform.OS, hasBusiness: status !== "none", isAuthenticated, mode })}

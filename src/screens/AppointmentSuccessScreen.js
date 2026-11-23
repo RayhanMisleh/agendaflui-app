@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Animated, Easing } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../utils/ThemeContext";
+import { useReduceMotion, entranceDuration } from "../utils/motion";
 import Button from "../components/ui/Button";
 import Avatar from "../components/ui/Avatar";
 import Icon from "../components/ui/Icon";
@@ -21,8 +22,8 @@ const AppointmentSuccessScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const c = theme.colors;
-  const scale = useRef(new Animated.Value(0)).current;
-  const fade = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
+  const enter = useRef(new Animated.Value(0)).current;
 
   const appointment = route.params?.appointment || null;
   const isReschedule = Boolean(route.params?.isReschedule);
@@ -32,11 +33,10 @@ const AppointmentSuccessScreen = ({ navigation }) => {
   const showReward = Boolean(business && business.modules && business.modules.loyalty) && !isReschedule && rewardPoints > 0;
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.spring(scale, { toValue: 1, friction: 5, tension: 40, useNativeDriver: true }),
-      Animated.timing(fade, { toValue: 1, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-    ]).start();
-  }, [scale, fade]);
+    // Entra com opacidade e um deslocamento curto; com "reduzir movimento", já aparece pronta.
+    Animated.timing(enter, { toValue: 1, duration: entranceDuration(reduceMotion), easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [enter, reduceMotion]);
+  const rise = { opacity: enter, transform: [{ translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] };
 
   const title = isReschedule ? "Horário trocado" : pending ? "Agendamento enviado" : "Agendamento feito";
   const subtitle = pending ? "A loja vai confirmar o seu horário." : isReschedule ? "O novo horário já está salvo." : "Seu horário está reservado.";
@@ -44,10 +44,10 @@ const AppointmentSuccessScreen = ({ navigation }) => {
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: c.ground }]}>
       <View style={styles.content}>
-        <Animated.View style={[styles.badge, { backgroundColor: c.brand, transform: [{ scale }] }]}>
+        <Animated.View style={[styles.badge, { backgroundColor: c.brand, ...rise }]}>
           <Icon name="check" size={52} color={c.onBrand} />
         </Animated.View>
-        <Animated.View style={{ opacity: fade, alignItems: "center", width: "100%" }}>
+        <Animated.View style={{ ...rise, alignItems: "center", width: "100%" }}>
           <Text style={[styles.title, { color: c.ink }]}>{title}</Text>
           <Text style={[styles.subtitle, { color: c.inkMuted }]}>{subtitle}</Text>
 
@@ -86,7 +86,7 @@ const AppointmentSuccessScreen = ({ navigation }) => {
         </Animated.View>
       </View>
 
-      <Animated.View style={[styles.footer, { paddingBottom: insets.bottom + 24, opacity: fade }]}>
+      <Animated.View style={[styles.footer, { paddingBottom: insets.bottom + 24, opacity: enter }]}>
         <Button title="Voltar ao início" onPress={() => navigation.goBack()} fullWidth size="lg" />
       </Animated.View>
     </View>
