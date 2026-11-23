@@ -73,7 +73,7 @@ const MainTabs = () => {
         tabBarIcon: ({ focused }) => (
           <TabIcon name={route.name} focused={focused} theme={theme} styles={styles} />
         ),
-        tabBarActiveTintColor: theme.colors.primary,
+        tabBarActiveTintColor: theme.colors.brandText,
         tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarStyle: [
           styles.tabBar,

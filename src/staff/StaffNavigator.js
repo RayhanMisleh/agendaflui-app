@@ -62,7 +62,7 @@ function StaffTabs() {
       <Tab.Navigator
         screenOptions={({ route }) => ({
           headerShown: false,
-          tabBarActiveTintColor: c.brandStrong,
+          tabBarActiveTintColor: c.brandText,
           tabBarInactiveTintColor: c.inkMuted,
           tabBarStyle: { backgroundColor: c.surface, borderTopColor: c.line, paddingBottom: bottom, height: 56 + bottom },
           tabBarLabelStyle: { fontFamily: fonts.textSemi, fontSize: 12 },

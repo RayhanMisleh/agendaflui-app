@@ -108,5 +108,5 @@ export default function EntradaEquipeScreen({ navigation }) {
 const getStyles = (theme) =>
   StyleSheet.create({
     links: { marginTop: 24, alignItems: "center" },
-    link: { ...type.small, fontFamily: fonts.textSemi, color: theme.colors.brandStrong, textDecorationLine: "underline" },
+    link: { ...type.small, fontFamily: fonts.textSemi, color: theme.colors.brandText, textDecorationLine: "underline" },
   });

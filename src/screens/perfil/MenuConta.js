@@ -59,7 +59,7 @@ export function SeletorTema() {
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
           >
-            <Icon name={option.icon} size={20} color={active ? c.brandStrong : c.inkMuted} />
+            <Icon name={option.icon} size={20} color={active ? c.brandText : c.inkMuted} />
             <Text style={[styles.themeLabel, { color: active ? c.ink : c.inkMuted }]}>{option.label}</Text>
           </TouchableOpacity>
         );

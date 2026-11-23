@@ -50,7 +50,7 @@ export default function EscolhaServico({ services, selectedId, onSelect, isClubM
                     <Text style={[styles.tagText, { color: c.ink }]}>Só para {terms.club}</Text>
                   </View>
                 ) : earnLabel(service, terms) ? (
-                  <Text style={[styles.sub, { color: c.brandStrong }]}>{earnLabel(service, terms)}</Text>
+                  <Text style={[styles.sub, { color: c.brandText }]}>{earnLabel(service, terms)}</Text>
                 ) : null}
               </View>
             </TouchableOpacity>

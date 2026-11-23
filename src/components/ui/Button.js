@@ -94,7 +94,7 @@ const Button = ({
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variant === "primary" ? theme.colors.onBrand : theme.colors.primary}
+          color={variant === "primary" ? theme.colors.onBrand : theme.colors.brandText}
         />
       ) : (
         <View style={styles.content}>
@@ -169,10 +169,10 @@ const getStyles = (theme) => StyleSheet.create({
     color: theme.colors.textPrimary,
   },
   textOutline: {
-    color: theme.colors.primary,
+    color: theme.colors.brandText,
   },
   textGhost: {
-    color: theme.colors.primary,
+    color: theme.colors.brandText,
   },
   textSm: {
     fontSize: 14,

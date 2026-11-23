@@ -32,7 +32,7 @@ export default function EscolhaProfissional({ professionals, selectedId, onSelec
         )}
         <Text style={[styles.name, { color: c.ink }]} numberOfLines={2}>{item.name}</Text>
         {!isAny && item.bio ? <Text style={[styles.bio, { color: c.inkMuted }]} numberOfLines={2}>{item.bio}</Text> : null}
-        {selected ? <Text style={[styles.picked, { color: c.brandStrong }]}>Escolhido</Text> : null}
+        {selected ? <Text style={[styles.picked, { color: c.brandText }]}>Escolhido</Text> : null}
       </TouchableOpacity>
     );
   };

@@ -9,7 +9,7 @@ export default function FormMessage({ kind = "info", children }) {
   const { theme } = useTheme();
   if (!children) return null;
   const isError = kind === "error";
-  const color = isError ? theme.colors.danger : theme.colors.brandStrong;
+  const color = isError ? theme.colors.danger : theme.colors.brandText;
   return (
     <View
       style={[

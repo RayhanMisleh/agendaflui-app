@@ -73,7 +73,7 @@ export default function CartaoPerfil({ me, storeName, terms, balance, onSaved })
           ) : null}
           {me.isClubMember ? (
             <View style={[styles.tag, { backgroundColor: c.brandTint }]}>
-              <Icon name="award" size={14} color={c.brandStrong} />
+              <Icon name="award" size={14} color={c.brandText} />
               <Text style={[styles.tagText, { color: c.ink }]}>{terms.club}</Text>
             </View>
           ) : null}
