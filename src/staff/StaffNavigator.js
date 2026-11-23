@@ -13,6 +13,8 @@ import AgendaEquipeScreen from "./screens/AgendaEquipeScreen";
 import PerfilEquipeScreen from "./screens/PerfilEquipeScreen";
 import AtendimentoScreen from "./screens/AtendimentoScreen";
 import RemarcarScreen from "./screens/RemarcarScreen";
+import BloquearHorarioScreen from "./screens/BloquearHorarioScreen";
+import ClienteEquipeScreen from "./screens/ClienteEquipeScreen";
 import { fonts, type } from "../theme/tokens";
 
 const Tab = createBottomTabNavigator();
@@ -83,6 +85,8 @@ export default function StaffNavigator() {
       <Stack.Screen name={ROUTES.EquipeTabs} component={StaffTabs} />
       <Stack.Screen name={ROUTES.Atendimento} component={AtendimentoScreen} />
       <Stack.Screen name={ROUTES.Remarcar} component={RemarcarScreen} />
+      <Stack.Screen name={ROUTES.BloquearHorario} component={BloquearHorarioScreen} />
+      <Stack.Screen name={ROUTES.ClienteEquipe} component={ClienteEquipeScreen} />
     </Stack.Navigator>
   );
 }
