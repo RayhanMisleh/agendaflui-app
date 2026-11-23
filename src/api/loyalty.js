@@ -8,7 +8,7 @@ export async function getMyLoyalty() {
   return response.data;
 }
 
-// Visitante também lê (a rota aceita só a chave). O estoque não sai: cada prêmio traz `available`.
+// Visitante também lê (a rota não exige login). O estoque não sai: cada prêmio traz `available`.
 export async function listPrizes() {
   const response = await api.http.get("/loyalty/prizes");
   return response.data.items;

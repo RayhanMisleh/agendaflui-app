@@ -23,7 +23,6 @@ export const sessionTokens = createSessionTokens(tokenStore, getActiveSlug);
 
 export const api = createApiClient({
   baseURL: `${config.apiUrl}/v1`,
-  appKey: config.appKey,
   getSlug: getActiveSlug,
   tokens: sessionTokens,
   onSessionEnded: () => handlers.onSessionEnded(),

@@ -23,7 +23,7 @@ const errorBody = (code, reason, message = "Mensagem do servidor.") => ({ error:
 const refreshCalls = (adapter) => adapter.calls.filter((c) => c.url === "/auth/customer/refresh");
 
 // Monta o cliente com armazenamento em memória e adaptador falso. `state.slug` muda a loja ativa.
-async function setup(handler, { slug = "patas", withTokens = true, appKey = "chave-de-teste" } = {}) {
+async function setup(handler, { slug = "patas", withTokens = true } = {}) {
   const storage = memoryStorage();
   const store = createTokenStore(storage);
   const state = { slug };
@@ -34,7 +34,6 @@ async function setup(handler, { slug = "patas", withTokens = true, appKey = "cha
   const onBusinessGone = jest.fn();
   const client = createApiClient({
     baseURL: "https://api.test/v1",
-    appKey,
     getSlug: () => state.slug,
     tokens,
     onSessionEnded,
@@ -57,24 +56,23 @@ function meHandler({ refreshDelay = 15, refreshResult } = {}) {
 }
 
 describe("cabeçalhos", () => {
-  test("X-App-Key, X-Business, Authorization e Content-Type em toda requisição", async () => {
+  test("X-Business, Authorization e Content-Type em toda requisição, sem X-App-Key", async () => {
     const { http, adapter } = await setup(async () => ({ status: 200, data: {} }));
     await http.get("/me");
     const [call] = adapter.calls;
     expect(call.baseURL).toBe("https://api.test/v1");
-    expect(call.headers["x-app-key"]).toBe("chave-de-teste");
+    expect(call.headers["x-app-key"]).toBeUndefined();
     expect(call.headers["x-business"]).toBe("patas");
     expect(call.headers.authorization).toBe("Bearer acc-1");
     expect(call.headers["content-type"]).toMatch(/application\/json/);
   });
 
-  test("rotas /auth/customer/* não levam Authorization, mas levam a loja e a chave", async () => {
+  test("rotas /auth/customer/* não levam Authorization, mas levam a loja", async () => {
     const { http, adapter } = await setup(async () => ({ status: 200, data: {} }));
     await http.post("/auth/customer/login", { email: "a@b.c", password: "x" });
     const [call] = adapter.calls;
     expect(call.headers.authorization).toBeUndefined();
     expect(call.headers["x-business"]).toBe("patas");
-    expect(call.headers["x-app-key"]).toBe("chave-de-teste");
   });
 
   test("sem tokens não há Authorization", async () => {
@@ -97,17 +95,8 @@ describe("cabeçalhos", () => {
   });
 });
 
-describe("chave do app e URL", () => {
-  test("sem chave do app a requisição rejeita com mensagem clara e não vai à rede", async () => {
-    const { http, adapter } = await setup(async () => ({ status: 200, data: {} }), { appKey: "" });
-    const failure = await http.get("/professionals").catch((e) => e);
-    expect(failure).toBeInstanceOf(ApiError);
-    expect(failure.code).toBe("app_key_missing");
-    expect(failure.message).toBe("App sem chave de acesso. Avise o suporte.");
-    expect(adapter.calls).toHaveLength(0);
-  });
-
-  test("URL absoluta (outro host) nunca recebe a chave nem o token", async () => {
+describe("URL", () => {
+  test("URL absoluta (outro host) nunca recebe o token", async () => {
     const { http, adapter } = await setup(async () => ({ status: 200, data: {} }));
     for (const url of ["https://evil.test/x", "http://evil.test/x", "//evil.test/x"]) {
       await expect(http.get(url)).rejects.toBeInstanceOf(ApiError);
@@ -446,15 +435,6 @@ describe("401 que nunca renova", () => {
     expect(adapter.calls).toHaveLength(1);
   });
 
-  test("invalid_app_key não renova", async () => {
-    const { http, adapter, tokens } = await setup(async () => ({
-      status: 401,
-      data: errorBody("unauthorized", "invalid_app_key", "Chave do aplicativo inválida."),
-    }));
-    await expect(http.get("/me")).rejects.toMatchObject({ reason: "invalid_app_key" });
-    expect(refreshCalls(adapter)).toHaveLength(0);
-    expect(tokens.get()).toEqual(T1);
-  });
 });
 
 describe("erros", () => {

@@ -11,7 +11,6 @@ jest.mock("../../src/api", () => {
   const adapter = fakeAdapter((call) => mockHandler(call));
   const client = createApiClient({
     baseURL: "https://api.test/v1",
-    appKey: "chave-de-teste",
     getSlug: () => "patas",
     tokens: { get: () => null, set: async () => {}, clear: async () => {} },
     onSessionEnded: () => {},

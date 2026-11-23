@@ -6,7 +6,6 @@ describe("fakeAdapter", () => {
     const adapter = fakeAdapter(async () => ({ status: 200, data: {} }), { maxCalls: 3 });
     const { http } = createApiClient({
       baseURL: "https://api.test/v1",
-      appKey: "k",
       getSlug: () => "patas",
       tokens: { get: () => null, set: async () => {}, clear: async () => {}, generation: () => 0 },
       onSessionEnded() {},

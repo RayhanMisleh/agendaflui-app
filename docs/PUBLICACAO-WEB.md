@@ -4,21 +4,15 @@ O app web é um site estático: `npm run build:web` gera `dist/web/` e `dist/age
 
 Endereço usado abaixo: `https://app.agendaflui.com.br`. Para outro, troque em todos os passos.
 
-## 1. Chave do app (painel dev)
+## 1. Antes: API liberando o endereço
 
-1. Em `https://dev.agendaflui.com.br` → Chaves e API → nova chave **de plataforma**.
-2. Nome: `App web`. Origens permitidas: `https://app.agendaflui.com.br` (sem barra no fim).
-   A mesma origem libera o CORS e a volta do pagamento do Mercado Pago (`returnUrl`).
-3. Copie a chave mostrada (ela aparece uma vez só).
+A API só aceita o app web vindo das origens liberadas no servidor (CORS e volta do pagamento do Mercado Pago). No Coolify, a variável de origens do AgendaFlui precisa conter `https://app.agendaflui.com.br` (sem barra no fim).
 
 ## 2. Gerar o zip
 
 ```bash
-cp .env.example .env    # cole a chave em EXPO_PUBLIC_APP_KEY=
 npm run build:web
 ```
-
-Sem a chave o script para. A chave fica dentro do JavaScript do site (é um identificador, não um segredo); a proteção é a lista de origens.
 
 ## 3. Subdomínio na Hostinger (hPanel)
 
@@ -42,7 +36,7 @@ Por FTP: envie o **conteúdo** de `dist/web/` (com o `.htaccess`, que é oculto)
 - Recarregar a página numa tela interna não dá 404.
 - Uma compra de teste volta para `/<loja>/pedidos/<id>` depois do Mercado Pago.
 
-Erro de rede logo ao abrir: origem errada na chave (confira `https`, sem `www` e sem barra).
+Erro de rede logo ao abrir: a origem não está liberada na API (confira `https`, sem `www` e sem barra).
 
 ## Nova versão
 

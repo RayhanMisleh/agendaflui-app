@@ -128,7 +128,7 @@ export async function cancelOrder(id, reason) {
 }
 
 // { checkoutUrl, expiresAt, expiresLabel }. Chamar de novo devolve o mesmo endereço.
-// `returnUrl` só vale http(s) com a origem liberada na chave do app; no celular vai `null`.
+// `returnUrl` só vale http(s) com a origem do app web liberada na API; no celular vai `null`.
 export async function startCheckout(id, returnUrl) {
   const response = await api.http.post(`/store/orders/${enc(id)}/checkout`, returnUrl ? { returnUrl } : {});
   return response.data;

@@ -32,7 +32,7 @@ describe("termos antigos", () => {
       expect(text).not.toContain("../site");
       expect(text).toMatch(/agendaflui/i);
     }
-    expect(fs.readFileSync(path.join(root, "README.md"), "utf8")).toContain("EXPO_PUBLIC_APP_KEY");
+    expect(fs.readFileSync(path.join(root, "README.md"), "utf8")).toContain("EXPO_PUBLIC_API_URL");
   });
 
   test("nenhum termo antigo no código, na configuração e nos nomes dos assets", () => {

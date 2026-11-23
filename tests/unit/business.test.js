@@ -22,7 +22,6 @@ function makeClient(handler, { slug = null } = {}) {
   const onBusinessGone = jest.fn();
   const client = createApiClient({
     baseURL: "https://api.test/v1",
-    appKey: "chave-de-teste",
     getSlug: () => state.slug,
     tokens,
     onSessionEnded: jest.fn(),
@@ -40,7 +39,6 @@ describe("fetchBusiness", () => {
     expect(adapter.calls[0].method).toBe("GET");
     expect(adapter.calls[0].url).toBe("/business");
     expect(adapter.calls[0].headers["x-business"]).toBe("patas");
-    expect(adapter.calls[0].headers["x-app-key"]).toBe("chave-de-teste");
   });
 
   test("401 unknown_business vira a mensagem de código errado e não derruba a loja atual", async () => {

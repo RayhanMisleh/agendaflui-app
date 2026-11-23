@@ -8,12 +8,11 @@ Expo SDK 54, React Native 0.81, JavaScript, react-navigation 7 e axios.
 
 ```bash
 npm install
-cp .env.example .env   # preencha EXPO_PUBLIC_APP_KEY
+cp .env.example .env   # opcional: só para apontar outra API
 npx expo start
 ```
 
 - `EXPO_PUBLIC_API_URL`: endereço da API (padrão `https://api.agendaflui.com.br`).
-- `EXPO_PUBLIC_APP_KEY`: chave de plataforma do app (web, iOS ou Android), gerada no painel. Sem ela o app avisa e não chama a API. Nunca commite o `.env`.
 
 ## Como entrar numa loja
 
@@ -39,13 +38,13 @@ Lógica (cliente da API, sessão, loja, carrinho, pedido) tem teste em `tests/un
 ## Limitações
 
 - Na web os tokens ficam no `localStorage`; no celular, no SecureStore.
-- A origem do app web precisa estar liberada na chave de plataforma.
+- A API só aceita o app web vindo das origens liberadas no servidor (`https://app.agendaflui.com.br`).
 - O servidor web precisa devolver o `index.html` para `/<slug>` e `/<slug>/pedidos/<id>`.
 - No celular, a volta do pagamento acontece quando a pessoa fecha o navegador.
 
 ## O que é do dono
 
-- `eas init` e `eas env:create --name EXPO_PUBLIC_APP_KEY` (uma chave por plataforma).
+- `eas init` (projeto EAS e `projectId`, que o push precisa).
 - Preencher os ids das lojas de aplicativos.
 - Revogar, no Google, a chave antiga do app anterior.
 

@@ -4,8 +4,7 @@ import { ApiError, toApiError, SESSION_ENDED_MESSAGE } from "./errors";
 const AUTH_PATH = "/auth/customer/";
 const REFRESH_PATH = "/auth/customer/refresh";
 const NO_BUSINESS_MESSAGE = "Escolha a sua loja para continuar.";
-const NO_APP_KEY_MESSAGE = "App sem chave de acesso. Avise o suporte.";
-// Só caminhos relativos à base da API: URL absoluta levaria a chave e o token a outro host.
+// Só caminhos relativos à base da API: URL absoluta levaria o token a outro host.
 const ABSOLUTE_URL = /^(?:[a-z][a-z0-9+.-]*:)?\/\//i;
 
 function pathOf(url) {
@@ -17,9 +16,9 @@ function sessionEnded() {
   return new ApiError(SESSION_ENDED_MESSAGE, { status: 401, code: "unauthorized", reason: "session_ended" });
 }
 
-// Cliente único da API v1. Toda requisição leva a chave da plataforma e a loja (X-Business); o token só vai
+// Cliente único da API v1. Toda requisição leva a loja (X-Business); o token só vai
 // quando a requisição é da loja ativa. `http` rejeita sempre com ApiError.
-export function createApiClient({ baseURL, appKey, appKeyMissing = !appKey, getSlug, tokens, onSessionEnded, onBusinessGone, adapter }) {
+export function createApiClient({ baseURL, getSlug, tokens, onSessionEnded, onBusinessGone, adapter }) {
   const http = axios.create({
     baseURL,
     timeout: 15000,
@@ -75,11 +74,9 @@ export function createApiClient({ baseURL, appKey, appKeyMissing = !appKey, getS
     if (ABSOLUTE_URL.test(String(request.url || ""))) {
       return Promise.reject(new ApiError("Endereço inválido.", { code: "invalid_url" }));
     }
-    if (appKeyMissing) return Promise.reject(new ApiError(NO_APP_KEY_MESSAGE, { code: "app_key_missing" }));
     const slug = request.headers.get("X-Business") || getSlug();
     if (!slug) return Promise.reject(new ApiError(NO_BUSINESS_MESSAGE, { code: "no_business" }));
 
-    request.headers.set("X-App-Key", appKey);
     request.headers.set("X-Business", slug);
     request.headers.delete("Authorization");
 
