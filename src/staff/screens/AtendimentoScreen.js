@@ -85,6 +85,8 @@ export default function AtendimentoScreen() {
       else await load();
       Toast.show({ type: "success", text1: DONE_MESSAGES[action] });
     } catch (failure) {
+      // Outra pessoa já mudou o atendimento: mostra a situação de agora e mantém o aviso.
+      if (failure.status === 409 || failure.status === 422) await load();
       setError(failure.message);
     } finally {
       setBusy(null);

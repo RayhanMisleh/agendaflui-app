@@ -35,7 +35,7 @@ function wellKnownFiles(env = {}) {
 
   const raw = clean(env.ANDROID_CERT_SHA256);
   if (raw) {
-    const prints = raw.split(",").map((p) => p.trim());
+    const prints = raw.split(",").map((p) => p.trim().toUpperCase());
     if (!prints.every((p) => FINGERPRINT.test(p))) {
       throw new Error(
         "ANDROID_CERT_SHA256 inválido: use uma ou mais impressões SHA-256 separadas por vírgula, cada uma com 32 pares hexadecimais separados por dois-pontos."

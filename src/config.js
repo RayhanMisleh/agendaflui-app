@@ -20,7 +20,7 @@ export function readConfig(env = {}) {
     scheme: "agendaflui",
     appStoreUrl: httpsUrl(env.EXPO_PUBLIC_APP_STORE_URL),
     playStoreUrl: httpsUrl(env.EXPO_PUBLIC_PLAY_STORE_URL),
-    painelUrl: (env.EXPO_PUBLIC_PAINEL_URL || "").trim().replace(/\/+$/, "") || DEFAULT_PAINEL_URL,
+    painelUrl: httpsUrl((env.EXPO_PUBLIC_PAINEL_URL || "").trim().replace(/\/+$/, "")) || DEFAULT_PAINEL_URL,
   };
 }
 

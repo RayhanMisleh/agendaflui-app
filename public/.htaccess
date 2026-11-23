@@ -32,16 +32,18 @@ AddType font/woff2 .woff2
   RewriteRule ^ index.html [L]
 </IfModule>
 
+# Associação do link https com o app (iOS e Android): JSON mesmo sem mod_headers.
+<Files "apple-app-site-association">
+  ForceType application/json
+</Files>
+
 <IfModule mod_headers.c>
   # Página e manifesto: sempre conferem a versão nova.
   <FilesMatch "\.(html|json)$">
     Header set Cache-Control "no-cache"
   </FilesMatch>
 
-  # Associação do link https com o app (iOS e Android): JSON, sempre conferido de novo.
-  <Files "apple-app-site-association">
-    ForceType application/json
-  </Files>
+  # Associação do link https com o app: sempre conferida de novo.
   <FilesMatch "^(apple-app-site-association|assetlinks\.json)$">
     Header set Cache-Control "no-cache"
   </FilesMatch>

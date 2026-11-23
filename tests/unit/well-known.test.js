@@ -76,3 +76,12 @@ describe(".htaccess", () => {
     expect(wk).toBeLessThan(fallback);
   });
 });
+
+describe("wellKnownFiles: impressão em minúsculas", () => {
+  test("grava a impressão em maiúsculas", () => {
+    const { wellKnownFiles: build } = require("../../scripts/well-known");
+    const lower = "ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89";
+    const files = build({ ANDROID_CERT_SHA256: lower });
+    expect(JSON.parse(files[0].content)[0].target.sha256_cert_fingerprints).toEqual([lower.toUpperCase()]);
+  });
+});

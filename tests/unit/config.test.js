@@ -42,3 +42,11 @@ describe("readConfig: lojas de aplicativos e painel", () => {
     expect(readConfig({ EXPO_PUBLIC_PAINEL_URL: " " }).painelUrl).toBe("https://painel.agendaflui.com.br");
   });
 });
+
+describe("readConfig: painelUrl só https", () => {
+  test("endereço sem https volta ao padrão", () => {
+    expect(readConfig({ EXPO_PUBLIC_PAINEL_URL: "http://p.test" }).painelUrl).toBe("https://painel.agendaflui.com.br");
+    expect(readConfig({ EXPO_PUBLIC_PAINEL_URL: "javascript:alert(1)" }).painelUrl).toBe("https://painel.agendaflui.com.br");
+    expect(readConfig({ EXPO_PUBLIC_PAINEL_URL: "https://p.test/" }).painelUrl).toBe("https://p.test");
+  });
+});
