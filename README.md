@@ -32,6 +32,8 @@ npx expo export --platform web --output-dir dist/web
 npx expo export --platform android --output-dir dist/android
 ```
 
+Versão web para a Hostinger: `npm run build:web` gera `dist/agendaflui-web.zip` (passo a passo em `docs/PUBLICACAO-WEB.md`).
+
 Lógica (cliente da API, sessão, loja, carrinho, pedido) tem teste em `tests/unit/`; telas não têm teste automático.
 
 ## Limitações
