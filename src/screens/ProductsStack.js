@@ -5,14 +5,16 @@ import ProductsScreen from "./ProductsScreen";
 import SingleProductScreen from "./SingleProductScreen";
 import CustomHeader from "../components/CustomHeader";
 
+import { Platform } from "react-native";
+import { useReduceMotion, stackScreenOptions } from "../utils/motion";
+
 const Stack = createStackNavigator();
 
 const ProductsStack = () => {
+  const reduceMotion = useReduceMotion();
   return (
     <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-      }}
+      screenOptions={stackScreenOptions({ platform: Platform.OS, reduceMotion })}
     >
       <Stack.Screen
         name={ROUTES.ProductsList}

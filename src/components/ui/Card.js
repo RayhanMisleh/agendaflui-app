@@ -1,6 +1,7 @@
 import React from "react";
-import { View, StyleSheet } from "react-native";
+import { View, Pressable, StyleSheet } from "react-native";
 import { useTheme } from "../../utils/ThemeContext";
+import { useReduceMotion, pressFeedback } from "../../utils/motion";
 import { radius } from "../../theme/tokens";
 
 const Card = ({
@@ -8,9 +9,12 @@ const Card = ({
   style,
   variant = "elevated", // elevated, outlined, flat
   padding = "md", // none, sm, md, lg
+  onPress,
+  ...rest
 }) => {
   const { theme } = useTheme();
   const styles = getStyles(theme);
+  const reduceMotion = useReduceMotion();
 
   const getVariantStyle = () => {
     switch (variant) {
@@ -36,15 +40,19 @@ const Card = ({
     }
   };
 
+  const base = [styles.base, getVariantStyle(), getPaddingStyle(), style];
+
+  // Cartão tocável: responde ao toque. Sem onPress, continua só uma caixa.
+  if (onPress) {
+    return (
+      <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [...base, pressFeedback(pressed, reduceMotion)]} {...rest}>
+        {children}
+      </Pressable>
+    );
+  }
+
   return (
-    <View
-      style={[
-        styles.base,
-        getVariantStyle(),
-        getPaddingStyle(),
-        style,
-      ]}
-    >
+    <View style={base} {...rest}>
       {children}
     </View>
   );

@@ -1,12 +1,13 @@
 import React from "react";
 import {
-  TouchableOpacity,
+  Pressable,
   Text,
   StyleSheet,
   ActivityIndicator,
   View,
 } from "react-native";
 import { useTheme } from "../../utils/ThemeContext";
+import { useReduceMotion, pressFeedback } from "../../utils/motion";
 import { radius, fonts } from "../../theme/tokens";
 
 const Button = ({
@@ -24,6 +25,7 @@ const Button = ({
 }) => {
   const { theme } = useTheme();
   const styles = getStyles(theme);
+  const reduceMotion = useReduceMotion();
 
   const getVariantStyle = () => {
     switch (variant) {
@@ -74,23 +76,25 @@ const Button = ({
   };
 
   return (
-    <TouchableOpacity
-      style={[
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
+      style={({ pressed }) => [
         styles.base,
         getVariantStyle(),
         getSizeStyle(),
         fullWidth && styles.fullWidth,
         disabled && styles.disabled,
         style,
+        pressFeedback(pressed, reduceMotion),
       ]}
       onPress={onPress}
       disabled={disabled || loading}
-      activeOpacity={0.8}
     >
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variant === "primary" ? theme.colors.onBrand : theme.colors.primary}
+          color={variant === "primary" ? theme.colors.onBrand : theme.colors.brandText}
         />
       ) : (
         <View style={styles.content}>
@@ -105,7 +109,7 @@ const Button = ({
           )}
         </View>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
@@ -165,10 +169,10 @@ const getStyles = (theme) => StyleSheet.create({
     color: theme.colors.textPrimary,
   },
   textOutline: {
-    color: theme.colors.primary,
+    color: theme.colors.brandText,
   },
   textGhost: {
-    color: theme.colors.primary,
+    color: theme.colors.brandText,
   },
   textSm: {
     fontSize: 14,

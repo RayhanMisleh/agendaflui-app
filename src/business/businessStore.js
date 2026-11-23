@@ -1,6 +1,8 @@
 import { normalizeSlug } from "./storeLink";
 
 const KEY = "agendaflui.business";
+const MODE_KEY = "agendaflui.mode";
+const MODES = ["customer", "staff"];
 
 // A loja escolhida e o cache dos dados públicos dela (AsyncStorage: nada aqui é segredo).
 export function createBusinessStore(storage) {
@@ -35,11 +37,26 @@ export function createBusinessStore(storage) {
       if (!saved.slug) return;
       await storage.setItem(KEY, JSON.stringify({ slug: saved.slug, business }));
     },
-    async clear() {
+    // 'customer' | 'staff' | null: um modo por vez no aparelho.
+    async getMode() {
       try {
-        await storage.removeItem(KEY);
+        const mode = await storage.getItem(MODE_KEY);
+        return MODES.includes(mode) ? mode : null;
       } catch (error) {
-        // nada a fazer
+        return null;
+      }
+    },
+    async setMode(mode) {
+      if (!MODES.includes(mode)) throw new Error("Modo inválido.");
+      await storage.setItem(MODE_KEY, mode);
+    },
+    async clear() {
+      for (const key of [KEY, MODE_KEY]) {
+        try {
+          await storage.removeItem(key);
+        } catch (error) {
+          // nada a fazer
+        }
       }
     },
   };

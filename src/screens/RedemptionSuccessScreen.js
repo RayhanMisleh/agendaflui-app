@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Animated, Easing, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../utils/ThemeContext";
+import { useReduceMotion, entranceDuration } from "../utils/motion";
 import { useTerms } from "../business/BusinessProvider";
 import { pointsLabel } from "../business/terms";
 import { cancelRedemption } from "../api/loyalty";
@@ -22,15 +23,14 @@ const RedemptionSuccessScreen = ({ route, navigation }) => {
   const [balance, setBalance] = useState(route.params ? route.params.balance : null);
   const [canceling, setCanceling] = useState(false);
 
-  const scale = useRef(new Animated.Value(0)).current;
-  const fade = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
+  const enter = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.spring(scale, { toValue: 1, friction: 5, tension: 40, useNativeDriver: true }),
-      Animated.timing(fade, { toValue: 1, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-    ]).start();
-  }, [scale, fade]);
+    // Entra com opacidade e um deslocamento curto; com "reduzir movimento", já aparece pronta.
+    Animated.timing(enter, { toValue: 1, duration: entranceDuration(reduceMotion), easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [enter, reduceMotion]);
+  const rise = { opacity: enter, transform: [{ translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] };
 
   const canceled = redemption && redemption.status === "CANCELED";
 
@@ -70,11 +70,11 @@ const RedemptionSuccessScreen = ({ route, navigation }) => {
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom, backgroundColor: c.ground }]}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Animated.View style={[styles.badge, { backgroundColor: canceled ? c.inkMuted : c.brand, transform: [{ scale }] }]}>
+        <Animated.View style={[styles.badge, { backgroundColor: canceled ? c.inkMuted : c.brand, ...rise }]}>
           <Icon name={canceled ? "x" : "gift"} size={48} color={c.onBrand} />
         </Animated.View>
 
-        <Animated.View style={{ opacity: fade, width: "100%", alignItems: "center" }}>
+        <Animated.View style={{ ...rise, width: "100%", alignItems: "center" }}>
           <Text style={[styles.title, { color: c.ink }]}>{canceled ? "Resgate cancelado" : "Resgate feito"}</Text>
           <Text style={[styles.subtitle, { color: c.inkMuted }]}>
             {canceled ? `Seus ${terms.points.plural} voltaram.` : "Mostre esta tela no balcão."}

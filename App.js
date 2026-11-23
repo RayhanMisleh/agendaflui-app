@@ -26,6 +26,10 @@ import SignUpScreen from "./src/screens/SignUpScreen";
 import RecuperarSenhaScreen from "./src/screens/RecuperarSenhaScreen";
 import NewUserEmailCodeScreen from "./src/screens/NewUserEmailCodeScreen";
 import ConfirmarExclusaoScreen from "./src/screens/ConfirmarExclusaoScreen";
+import BoasVindasScreen from "./src/screens/BoasVindasScreen";
+import EntradaEquipeScreen from "./src/staff/screens/EntradaEquipeScreen";
+import StaffNavigator from "./src/staff/StaffNavigator";
+import { StaffSessionProvider, useStaffSession } from "./src/staff/StaffSessionProvider";
 import { AuthProvider, useAuth } from "./src/components/AuthProvider";
 import { BusinessProvider, useBusiness } from "./src/business/BusinessProvider";
 import LoadingScreen from "./src/components/LoadingScreen";
@@ -33,7 +37,10 @@ import Button from "./src/components/ui/Button";
 import { registerDevice } from "./src/services/notificationService";
 import { useOrderLink } from "./src/store/useOrderLink";
 import { ThemeProvider, useTheme } from "./src/utils/ThemeContext";
+import { useReduceMotion, stackScreenOptions } from "./src/utils/motion";
+import { withWebFrame } from "./src/components/WebFrame";
 import { ROUTES, initialRootRoute } from "./src/navigation/routes";
+import { appointmentTarget } from "./src/staff/notificationTarget";
 import { colors, type } from "./src/theme/tokens";
 import { clearLegacyStorage } from "./src/session/legacy";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -41,17 +48,38 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Toast from "react-native-toast-message";
 
 const Stack = createStackNavigator();
+
+// Na web, cada tela entra numa coluna centrada: 480 px na entrada, 800 px no app.
+const Entry = {
+  CodigoLoja: withWebFrame(CodigoLojaScreen, "entry"),
+  Intro: withWebFrame(IntroScreen, "entry"),
+  Login: withWebFrame(LoginScreen, "entry"),
+  SignUp: withWebFrame(SignUpScreen, "entry"),
+  RecuperarSenha: withWebFrame(RecuperarSenhaScreen, "entry"),
+  NewUserEmailCode: withWebFrame(NewUserEmailCodeScreen, "entry"),
+  ConfirmarExclusao: withWebFrame(ConfirmarExclusaoScreen, "entry"),
+  BoasVindas: withWebFrame(BoasVindasScreen, "entry"),
+  EntradaEquipe: withWebFrame(EntradaEquipeScreen, "entry"),
+};
+const AppFrame = withWebFrame(Navigator, "app");
+const StaffFrame = withWebFrame(StaffNavigator, "app");
 const navigationRef = createNavigationContainerRef();
 
 // A loja escolhida não responde (suspensa ou sem rede e sem dados guardados).
 const LojaIndisponivel = () => {
   const { theme } = useTheme();
-  const { reload, switchBusiness } = useBusiness();
+  const { reload, switchBusiness, mode } = useBusiness();
+  const { signOut } = useStaffSession();
+  const isStaff = mode === "staff";
   return (
     <View style={[styles.unavailable, { backgroundColor: theme.colors.ground }]}>
       <Text style={[styles.unavailableTitle, { color: theme.colors.ink }]}>Esta loja não está disponível agora.</Text>
       <Button title="Tentar de novo" onPress={reload} fullWidth style={styles.unavailableButton} />
-      <Button title="Escolher outra loja" variant="outline" onPress={switchBusiness} fullWidth style={styles.unavailableButton} />
+      {isStaff ? (
+        <Button title="Sair da conta da equipe" variant="outline" onPress={signOut} fullWidth style={styles.unavailableButton} />
+      ) : (
+        <Button title="Escolher outra loja" variant="outline" onPress={switchBusiness} fullWidth style={styles.unavailableButton} />
+      )}
     </View>
   );
 };
@@ -64,10 +92,13 @@ const styles = StyleSheet.create({
 
 const RootNavigator = () => {
   const { isAuthenticated, isLoading } = useAuth();
-  const { status, business } = useBusiness();
+  const { status, business, mode } = useBusiness();
+  const { status: staffStatus } = useStaffSession();
+  const isStaff = mode === "staff";
   const storeName = business ? business.name : "Agenda Flui";
   const { theme } = useTheme();
   const { isDarkMode } = theme;
+  const reduceMotion = useReduceMotion();
   const notificationListener = useRef();
   const responseListener = useRef();
 
@@ -76,7 +107,7 @@ const RootNavigator = () => {
 
   // Inicializar push notifications quando o usuário estiver autenticado
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !isStaff) {
       // O servidor aceita o mesmo aparelho de novo; sem projectId do EAS ou em simulador, não registra e não mostra erro.
       registerDevice();
 
@@ -113,7 +144,43 @@ const RootNavigator = () => {
         responseListener.current.remove();
       }
     };
-  }, [isAuthenticated, storeName]);
+  }, [isAuthenticated, isStaff, storeName]);
+
+  // Equipe: registra o aparelho e escuta os avisos. Tocar num aviso abre o atendimento, com a agenda por baixo.
+  useEffect(() => {
+    if (!isStaff || staffStatus !== "ready") return undefined;
+    const received = Notifications.addNotificationReceivedListener((notification) => {
+      const { title, body } = notification.request.content;
+      Toast.show({
+        type: "info",
+        text1: storeName,
+        text2: [title, body].filter(Boolean).join(": "),
+        visibilityTime: 5000,
+        topOffset: 60,
+      });
+    });
+    const openAppointment = (response) => {
+      const target = appointmentTarget(response);
+      if (target && navigationRef.isReady()) navigationRef.navigate(ROUTES.Equipe, target);
+    };
+    const tapped = Notifications.addNotificationResponseReceivedListener(openAppointment);
+    // O aparelho é registrado de novo a cada sessão pronta (o servidor aceita repetição); falha não aparece para a pessoa.
+    try {
+      Promise.resolve(registerDevice({ target: "staff" })).catch(() => {});
+    } catch (error) {
+      // segue
+    }
+    // Aviso que abriu o app com ele fechado.
+    Promise.resolve(Notifications.getLastNotificationResponseAsync())
+      .then((last) => {
+        if (last) openAppointment(last);
+      })
+      .catch(() => {});
+    return () => {
+      received.remove();
+      tapped.remove();
+    };
+  }, [isStaff, staffStatus, storeName]);
 
   // Disable zoom and scroll bounce on web, and fix root background color
   useEffect(() => {
@@ -153,38 +220,32 @@ const RootNavigator = () => {
 
   return (
     <>
-    <Stack.Navigator 
-      screenOptions={{ 
-        headerShown: false,
-        animationEnabled: Platform.OS !== 'android',
-        ...(Platform.OS === 'web' && {
-          cardStyleInterpolator: ({ current: { progress } }) => ({
-            cardStyle: {
-              opacity: progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 1],
-              }),
-            },
-          }),
-        }),
-      }} 
+    <Stack.Navigator
+      screenOptions={stackScreenOptions({ platform: Platform.OS, reduceMotion })}
       // A pilha recomeça ao escolher ou trocar de loja: as telas mudam e a primeira tela precisa existir.
-      key={status === "none" ? "sem-loja" : "com-loja"}
-      initialRouteName={initialRootRoute({ platform: Platform.OS, hasBusiness: status !== "none", isAuthenticated })}
+      key={isStaff ? "equipe" : status === "none" ? "sem-loja" : "com-loja"}
+      initialRouteName={initialRootRoute({ platform: Platform.OS, hasBusiness: status !== "none", isAuthenticated, mode })}
     >
-      {status === "none" ? (
-        <Stack.Screen name={ROUTES.CodigoLoja} component={CodigoLojaScreen} />
+      {isStaff ? null : status === "none" ? (
+        <Stack.Screen name={ROUTES.CodigoLoja} component={Entry.CodigoLoja} />
       ) : (
         <>
-          {Platform.OS === "web" && <Stack.Screen name={ROUTES.Intro} component={IntroScreen} />}
-          <Stack.Screen name={ROUTES.Navigator} component={Navigator} />
-          <Stack.Screen name={ROUTES.Login} component={LoginScreen} />
-          <Stack.Screen name={ROUTES.SignUp} component={SignUpScreen} />
-          <Stack.Screen name={ROUTES.RecuperarSenha} component={RecuperarSenhaScreen} />
-          <Stack.Screen name={ROUTES.NewUserEmailCode} component={NewUserEmailCodeScreen} />
-          <Stack.Screen name={ROUTES.ConfirmarExclusao} component={ConfirmarExclusaoScreen} />
+          {Platform.OS === "web" && <Stack.Screen name={ROUTES.Intro} component={Entry.Intro} />}
+          <Stack.Screen name={ROUTES.Navigator} component={AppFrame} />
+          <Stack.Screen name={ROUTES.Login} component={Entry.Login} />
+          <Stack.Screen name={ROUTES.SignUp} component={Entry.SignUp} />
+          <Stack.Screen name={ROUTES.RecuperarSenha} component={Entry.RecuperarSenha} />
+          <Stack.Screen name={ROUTES.NewUserEmailCode} component={Entry.NewUserEmailCode} />
+          <Stack.Screen name={ROUTES.ConfirmarExclusao} component={Entry.ConfirmarExclusao} />
         </>
       )}
+      {!isStaff && status === "none" ? (
+        <>
+          <Stack.Screen name={ROUTES.BoasVindas} component={Entry.BoasVindas} />
+          <Stack.Screen name={ROUTES.EntradaEquipe} component={Entry.EntradaEquipe} />
+        </>
+      ) : null}
+      {isStaff ? <Stack.Screen name={ROUTES.Equipe} component={StaffFrame} /> : null}
     </Stack.Navigator>
     <StatusBar style={isDarkMode ? "light" : "dark"} backgroundColor="transparent" translucent={true} />
     </>
@@ -208,6 +269,7 @@ export default function App() {
 
   if (!fontsLoaded) {
     return (
+      // Sem BusinessProvider aqui: ele monta uma vez só, abaixo, para o link de loja não ser tratado em dobro.
       <ThemeProvider>
         <LoadingScreen />
       </ThemeProvider>
@@ -217,22 +279,24 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.light.ground }}>
       <SafeAreaProvider style={{ backgroundColor: colors.light.ground }}>
-        <ThemeProvider>
-          <BusinessProvider>
-            <AuthProvider>
-              <NavigationContainer
-                ref={navigationRef}
-                documentTitle={{
-                  formatter: () => "Agenda Flui",
-                }}
-              >
-                <RootNavigator />
-              </NavigationContainer>
+        <BusinessProvider>
+          <ThemeProvider>
+            <StaffSessionProvider>
+              <AuthProvider>
+                <NavigationContainer
+                  ref={navigationRef}
+                  documentTitle={{
+                    formatter: () => "Agenda Flui",
+                  }}
+                >
+                  <RootNavigator />
+                </NavigationContainer>
 
-              <Toast />
-            </AuthProvider>
-          </BusinessProvider>
-        </ThemeProvider>
+                <Toast />
+              </AuthProvider>
+            </StaffSessionProvider>
+          </ThemeProvider>
+        </BusinessProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

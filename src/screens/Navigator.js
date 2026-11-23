@@ -8,6 +8,7 @@ import {
   SafeAreaView,
 } from "react-native-safe-area-context";
 import { useTheme } from "../utils/ThemeContext";
+import { useReduceMotion, stackScreenOptions } from "../utils/motion";
 import { useBusiness } from "../business/BusinessProvider";
 import { ROUTES } from "../navigation/routes";
 import Icon from "../components/ui/Icon";
@@ -72,7 +73,7 @@ const MainTabs = () => {
         tabBarIcon: ({ focused }) => (
           <TabIcon name={route.name} focused={focused} theme={theme} styles={styles} />
         ),
-        tabBarActiveTintColor: theme.colors.primary,
+        tabBarActiveTintColor: theme.colors.brandText,
         tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarStyle: [
           styles.tabBar,
@@ -110,6 +111,7 @@ const MainTabs = () => {
 // Main Navigator with Stack for modals/success screens
 const Navigator = () => {
   const { theme } = useTheme();
+  const reduceMotion = useReduceMotion();
   const styles = getStyles(theme);
 
   return (
@@ -117,8 +119,7 @@ const Navigator = () => {
       <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <Stack.Navigator
           screenOptions={{
-            headerShown: false,
-            animationEnabled: Platform.OS !== 'android',
+            ...stackScreenOptions({ platform: Platform.OS, reduceMotion }),
             cardStyle: { backgroundColor: theme.colors.background },
           }}
         >
@@ -169,15 +170,6 @@ const getStyles = (theme) => StyleSheet.create({
   },
   container: {
     flex: 1,
-    ...(Platform.OS === 'web' ? {
-      maxWidth: 800,
-      width: '100%',
-      alignSelf: 'center',
-      backgroundColor: theme.colors.background,
-      borderLeftWidth: 1,
-      borderRightWidth: 1,
-      borderColor: theme.colors.border,
-    } : {}),
   },
   tabBar: {
     backgroundColor: theme.colors.background,

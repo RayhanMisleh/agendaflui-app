@@ -13,11 +13,17 @@ npx expo start
 ```
 
 - `EXPO_PUBLIC_API_URL`: endereço da API (padrão `https://api.agendaflui.com.br`).
+- `EXPO_PUBLIC_APP_STORE_URL` e `EXPO_PUBLIC_PLAY_STORE_URL`: páginas do app na App Store e no Google Play (só `https://`). Sem elas, a web não mostra os botões de baixar.
+- `EXPO_PUBLIC_PAINEL_URL`: painel completo da equipe (padrão `https://painel.agendaflui.com.br`).
 
 ## Como entrar numa loja
 
 - Link `agendaflui://loja/<slug>` no celular, ou `/<slug>` na web.
 - Ou digitando o código da loja na primeira tela.
+
+- Na primeira tela, "Sou cliente" pede o link ou o código da loja; "Sou da equipe" entra com e-mail e senha do painel e já cai na loja da pessoa, com a marca dela. A equipe vê agenda e perfil (gestão fica em "Abrir painel completo").
+
+O aparelho guarda um modo por vez (cliente ou equipe). Entrar num modo apaga a sessão do outro. Com a equipe logada, link de loja é ignorado ("Saia da conta da equipe para entrar como cliente.").
 
 Trocar de loja apaga a sessão, o carrinho e o aparelho de push da loja anterior.
 

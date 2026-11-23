@@ -120,5 +120,5 @@ export default function NewUserEmailCodeScreen({ navigation, route }) {
 const getStyles = (theme) =>
   StyleSheet.create({
     linkLine: { ...type.body, color: theme.colors.inkMuted, textAlign: "center", marginTop: 20 },
-    link: { fontFamily: fonts.textSemi, color: theme.colors.brand },
+    link: { fontFamily: fonts.textSemi, color: theme.colors.brandText },
   });

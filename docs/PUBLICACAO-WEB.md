@@ -14,6 +14,8 @@ A API só aceita o app web vindo das origens liberadas no servidor (CORS e volta
 npm run build:web
 ```
 
+Para o link `https://app.agendaflui.com.br/<loja>` abrir o app instalado, defina antes `APPLE_TEAM_ID` (ID do time, na conta Apple Developer, em Associação) e `ANDROID_CERT_SHA256` (impressão SHA-256 do certificado de assinatura do app, no Google Play Console, em Integridade do app; várias separadas por vírgula). O script grava `.well-known/apple-app-site-association` e `.well-known/assetlinks.json` no zip. Sem as variáveis, nada é gerado e o link abre a web; com valor inválido, o script para e diz qual variável corrigir.
+
 ## 3. Subdomínio na Hostinger (hPanel)
 
 1. Sites → o site do domínio → Domínios → Subdomínios → criar `app`. A pasta sugerida é `public_html/app`.
@@ -33,6 +35,7 @@ Por FTP: envie o **conteúdo** de `dist/web/` (com o `.htaccess`, que é oculto)
 ## 5. Conferir
 
 - `https://app.agendaflui.com.br/<código-da-loja>` abre a loja e o login funciona.
+- Com as variáveis: `https://app.agendaflui.com.br/.well-known/apple-app-site-association` e `.../assetlinks.json` abrem como JSON.
 - Recarregar a página numa tela interna não dá 404.
 - Uma compra de teste volta para `/<loja>/pedidos/<id>` depois do Mercado Pago.
 

@@ -6,7 +6,10 @@ import { fetchBusiness } from "../api/business";
 import { clearCartFor } from "../services/cartService";
 import { unregisterDevice } from "../services/notificationService";
 import { createBusinessStore } from "./businessStore";
-import { decideStoreSwitch, parseStoreLink, stripStoreFromAddress } from "./storeLink";
+import Toast from "react-native-toast-message";
+import { parseStoreLink, stripStoreFromAddress } from "./storeLink";
+import { staffSessionTokens, triggerStaffBusinessGone } from "../staff/api";
+import { decideIncomingLink, enterCustomerMode, STAFF_LINK_NOTICE } from "../staff/session";
 import { leaveBusiness } from "./switching";
 import { termsOf } from "./terms";
 
@@ -16,13 +19,16 @@ const inert = {
   status: "loading",
   slug: null,
   business: null,
+  mode: null,
   selectBusiness: async () => {},
   switchBusiness: async () => {},
+  resetStore: () => {},
   reload: async () => {},
 };
 const BusinessContext = createContext(inert);
 
-// status: 'loading' (descobrindo a loja), 'none' (sem loja: só a tela de código), 'ready', 'unavailable'.
+// status: 'loading' (descobrindo a loja), 'none' (sem loja: escolha entre cliente e equipe), 'ready', 'unavailable'.
+// mode: 'customer' | 'staff' | null. Um modo por vez no aparelho.
 export function useBusiness() {
   return useContext(BusinessContext);
 }
@@ -63,6 +69,13 @@ async function initialUrl() {
 export function BusinessProvider({ children }) {
   const [state, setState] = useState({ status: "loading", slug: null, business: null });
   const current = useRef(state);
+  const [mode, setModeState] = useState(null);
+  const modeRef = useRef(null);
+
+  const applyMode = useCallback((next) => {
+    modeRef.current = next;
+    setModeState(next);
+  }, []);
 
   const apply = useCallback((next) => {
     current.current = next;
@@ -100,34 +113,55 @@ export function BusinessProvider({ children }) {
   }, []);
 
   const adopt = useCallback(
-    async (slug, business) => {
+    async (slug, business, asStaff) => {
       await businessStore.setSlug(slug);
       if (business) await businessStore.setCached(business);
+      // A equipe já gravou o modo dela antes de escolher a loja; o cliente grava o dele (e tira a equipe do aparelho).
+      if (asStaff) applyMode("staff");
+      else {
+        await enterCustomerMode({
+          businessStore,
+          tokens: staffSessionTokens,
+          unregisterDevice: () => unregisterDevice({ target: "staff" }),
+        });
+        applyMode("customer");
+      }
       apply({ status: business ? "ready" : "loading", slug, business: business || null });
       refresh(slug);
     },
-    [apply, refresh]
+    [apply, applyMode, refresh]
   );
 
   const selectBusiness = useCallback(
-    async (slug, business) => {
+    async (slug, business, { asStaff = false } = {}) => {
       if (current.current.slug && current.current.slug !== slug) await leave();
-      await adopt(slug, business);
+      await adopt(slug, business, asStaff);
     },
     [adopt, leave]
   );
 
+  // Volta ao estado sem loja e sem modo, sem tocar nas sessões (quem chama já as apagou).
+  const resetStore = useCallback(() => {
+    apply({ status: "none", slug: null, business: null });
+    applyMode(null);
+  }, [apply, applyMode]);
+
   const switchBusiness = useCallback(async () => {
     if (!current.current.slug) return;
     await leave();
-    apply({ status: "none", slug: null, business: null });
-  }, [apply, leave]);
+    resetStore();
+  }, [leave, resetStore]);
 
   // Link de loja com o app aberto ou na partida: sem loja, seleciona; outra loja, confirma antes de trocar.
   const handleIncoming = useCallback(
     async (slug) => {
-      const decision = decideStoreSwitch(current.current.slug, slug);
+      const decision = decideIncomingLink(modeRef.current, current.current.slug, slug);
       if (decision === "none") return;
+      if (decision === "ignore_staff") {
+        // Equipe logada: o link não troca a loja nem derruba a sessão.
+        Toast.show({ type: "info", text1: STAFF_LINK_NOTICE, visibilityTime: 5000, topOffset: 60 });
+        return;
+      }
       let business;
       try {
         business = await fetchBusiness(api.http, slug);
@@ -146,8 +180,11 @@ export function BusinessProvider({ children }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [stored, url] = await Promise.all([businessStore.getSlug(), initialUrl()]);
+      const [stored, url, storedMode] = await Promise.all([businessStore.getSlug(), initialUrl(), businessStore.getMode()]);
       if (cancelled) return;
+      // Modo sem loja guardada não faz sentido: some.
+      if (stored) applyMode(storedMode);
+      else if (storedMode) await businessStore.clear();
       if (stored) {
         const cached = await businessStore.getCached();
         apply({ status: cached ? "ready" : "loading", slug: stored, business: cached });
@@ -162,10 +199,11 @@ export function BusinessProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [apply, refresh, handleIncoming]);
+  }, [apply, applyMode, refresh, handleIncoming]);
 
   useEffect(() => {
-    setSessionHandlers({ onBusinessGone: switchBusiness });
+    // Loja que sumiu: na equipe, quem apaga é a sessão da equipe (ela guarda tokens que o cliente não conhece).
+    setSessionHandlers({ onBusinessGone: () => (modeRef.current === "staff" ? triggerStaffBusinessGone() : switchBusiness()) });
   }, [switchBusiness]);
 
   useEffect(() => {
@@ -190,8 +228,8 @@ export function BusinessProvider({ children }) {
   }, [apply, refresh]);
 
   const value = useMemo(
-    () => ({ ...state, selectBusiness, switchBusiness, reload }),
-    [state, selectBusiness, switchBusiness, reload]
+    () => ({ ...state, mode, selectBusiness, switchBusiness, resetStore, reload }),
+    [state, mode, selectBusiness, switchBusiness, resetStore, reload]
   );
 
   return <BusinessContext.Provider value={value}>{children}</BusinessContext.Provider>;

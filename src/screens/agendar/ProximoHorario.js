@@ -32,7 +32,7 @@ export default function ProximoHorario({ appointment, busy, onCancel, onReschedu
           </View>
         </View>
         <View style={[styles.when, { backgroundColor: c.brandTint }]}>
-          <Icon name="clock" size={18} color={c.brandStrong} />
+          <Icon name="clock" size={18} color={c.brandText} />
           <Text style={[styles.whenText, { color: c.ink }]}>
             {formatDay(appointment.local.date)}, às {appointment.local.start}
           </Text>

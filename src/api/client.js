@@ -3,6 +3,8 @@ import { ApiError, toApiError, SESSION_ENDED_MESSAGE } from "./errors";
 
 const AUTH_PATH = "/auth/customer/";
 const REFRESH_PATH = "/auth/customer/refresh";
+// O cliente de clientes nunca leva o token dele às rotas da equipe.
+const CUSTOMER_ANONYMOUS_PATHS = ["/staff", "/auth/staff"];
 const NO_BUSINESS_MESSAGE = "Escolha a sua loja para continuar.";
 // Só caminhos relativos à base da API: URL absoluta levaria o token a outro host.
 const ABSOLUTE_URL = /^(?:[a-z][a-z0-9+.-]*:)?\/\//i;
@@ -12,13 +14,33 @@ function pathOf(url) {
   return text.replace(/^https?:\/\/[^/]+(?:\/v1)?/i, "").split("?")[0];
 }
 
+// O caminho é o prefixo ou está dentro dele ("/business" não vale para "/businesses").
+function under(path, prefix) {
+  const base = prefix.replace(/\/+$/, "");
+  return path === base || path.startsWith(`${base}/`);
+}
+
 function sessionEnded() {
   return new ApiError(SESSION_ENDED_MESSAGE, { status: 401, code: "unauthorized", reason: "session_ended" });
 }
 
-// Cliente único da API v1. Toda requisição leva a loja (X-Business); o token só vai
-// quando a requisição é da loja ativa. `http` rejeita sempre com ApiError.
-export function createApiClient({ baseURL, getSlug, tokens, onSessionEnded, onBusinessGone, adapter }) {
+// Cliente da API v1. Toda requisição leva a loja (X-Business); o token só vai quando a requisição é da loja
+// ativa. `http` rejeita sempre com ApiError. Sem as opções de caminho, é o cliente de clientes; a equipe usa
+// os mesmos mecanismos com outro prefixo de autenticação e outra rota de renovação.
+// `anonymousPaths`: prefixos que nunca levam Authorization. `noBusinessPaths`: caminhos exatos que saem sem
+// X-Business e sem token (o login da equipe, antes de existir loja).
+export function createApiClient({
+  baseURL,
+  getSlug,
+  tokens,
+  authPrefix = AUTH_PATH,
+  refreshPath = REFRESH_PATH,
+  anonymousPaths = CUSTOMER_ANONYMOUS_PATHS,
+  noBusinessPaths = [],
+  onSessionEnded,
+  onBusinessGone,
+  adapter,
+}) {
   const http = axios.create({
     baseURL,
     timeout: 15000,
@@ -37,7 +59,7 @@ export function createApiClient({ baseURL, getSlug, tokens, onSessionEnded, onBu
     let response;
     try {
       // A loja vai explícita: é a do envio, mesmo que a ativa mude enquanto espera.
-      response = await http.post(REFRESH_PATH, { refreshToken: current.refreshToken }, { headers: { "X-Business": slug } });
+      response = await http.post(refreshPath, { refreshToken: current.refreshToken }, { headers: { "X-Business": slug } });
     } catch (error) {
       // Recusa de verdade (4xx, menos tempo esgotado e limite): a sessão acabou. Rede, 5xx e limite: tokens ficam.
       const refused = error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429;
@@ -74,6 +96,12 @@ export function createApiClient({ baseURL, getSlug, tokens, onSessionEnded, onBu
     if (ABSOLUTE_URL.test(String(request.url || ""))) {
       return Promise.reject(new ApiError("Endereço inválido.", { code: "invalid_url" }));
     }
+    const path = pathOf(request.url);
+    if (noBusinessPaths.includes(path)) {
+      request.headers.delete("X-Business");
+      request.headers.delete("Authorization");
+      return request;
+    }
     const slug = request.headers.get("X-Business") || getSlug();
     if (!slug) return Promise.reject(new ApiError(NO_BUSINESS_MESSAGE, { code: "no_business" }));
 
@@ -81,7 +109,8 @@ export function createApiClient({ baseURL, getSlug, tokens, onSessionEnded, onBu
     request.headers.delete("Authorization");
 
     const current = tokens.get();
-    if (current && slug === getSlug() && !pathOf(request.url).startsWith(AUTH_PATH)) {
+    const tokenAllowed = !path.startsWith(authPrefix) && !anonymousPaths.some((prefix) => under(path, prefix));
+    if (current && slug === getSlug() && tokenAllowed) {
       request.headers.set("Authorization", `Bearer ${current.accessToken}`);
       request.agendafluiToken = current.accessToken;
     }
@@ -96,7 +125,7 @@ export function createApiClient({ baseURL, getSlug, tokens, onSessionEnded, onBu
       const error = toApiError(failure);
       if (error.status !== 401 || !request) throw error;
 
-      const onAuthRoute = pathOf(request.url).startsWith(AUTH_PATH);
+      const onAuthRoute = pathOf(request.url).startsWith(authPrefix);
 
       if (error.reason === "unknown_business") {
         if (request.agendafluiSlug === getSlug()) onBusinessGone();

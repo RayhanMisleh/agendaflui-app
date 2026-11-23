@@ -4,9 +4,17 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "../api";
+import { staffApi } from "../staff/api";
 
 // Só o token do aparelho (não é segredo de sessão) fica no AsyncStorage, para poder tirá-lo da loja ao sair.
 export const PUSH_TOKEN_KEY = "agendaflui.pushToken";
+export const STAFF_PUSH_TOKEN_KEY = "agendaflui.staffPushToken";
+
+// Cada alvo (cliente ou equipe) tem o seu cliente da API, a sua rota e a sua chave: um não mexe no aparelho do outro.
+const TARGETS = {
+  customer: { client: () => api, path: "/me/devices", key: PUSH_TOKEN_KEY },
+  staff: { client: () => staffApi, path: "/staff/devices", key: STAFF_PUSH_TOKEN_KEY },
+};
 
 // Como as notificações aparecem com o app aberto.
 Notifications.setNotificationHandler({
@@ -59,34 +67,36 @@ async function getPushToken() {
 }
 
 // Registra o aparelho na loja atual (o servidor aceita repetição). Nunca lança: push não pode travar o app.
-export async function registerDevice() {
+export async function registerDevice({ target = "customer" } = {}) {
+  const { client, path, key } = TARGETS[target] || TARGETS.customer;
   try {
     const pushToken = await getPushToken();
     if (!pushToken) return null;
-    await api.http.post("/me/devices", { platform: Platform.OS, pushToken });
-    await AsyncStorage.setItem(PUSH_TOKEN_KEY, pushToken);
+    await client().http.post(path, { platform: Platform.OS, pushToken });
+    await AsyncStorage.setItem(key, pushToken);
     return pushToken;
   } catch (error) {
     return null;
   }
 }
 
-// Tira o aparelho do cliente na loja atual e esquece o token. Sem token guardado, nem toca a rede.
-export async function unregisterDevice() {
+// Tira o aparelho da loja atual e esquece o token. Sem token guardado, nem toca a rede.
+export async function unregisterDevice({ target = "customer" } = {}) {
+  const { client, path, key } = TARGETS[target] || TARGETS.customer;
   let pushToken = null;
   try {
-    pushToken = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+    pushToken = await AsyncStorage.getItem(key);
   } catch (error) {
     return;
   }
   if (!pushToken) return;
   try {
-    await api.http.delete(`/me/devices/${encodeURIComponent(pushToken)}`, { timeout: 5000 });
+    await client().http.delete(`${path}/${encodeURIComponent(pushToken)}`, { timeout: 5000 });
   } catch (error) {
     // sem rede ou sessão vencida: o servidor passa o token ao próximo cliente que o registrar
   }
   try {
-    await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
+    await AsyncStorage.removeItem(key);
   } catch (error) {
     // sem armazenamento: nada a fazer
   }

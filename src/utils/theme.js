@@ -14,6 +14,7 @@ export const buildColors = (palette) => ({
   primaryLight: palette.brand,
   primaryDark: palette.brandStrong,
   primaryForeground: palette.onBrand,
+  brandText: palette.brandText,
   secondary: palette.ground,
   secondaryForeground: palette.ink,
   background: palette.ground,
