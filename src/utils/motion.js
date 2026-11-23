@@ -50,3 +50,9 @@ export function pressFeedback(pressed, reduceMotion) {
 export function entranceDuration(reduceMotion) {
   return reduceMotion ? 0 : DURATION;
 }
+
+// Esqueleto: com "reduzir movimento", opacidade fixa e sem laço; senão, pulsa entre 0,3 e 0,7.
+export function skeletonPulse(reduceMotion) {
+  if (reduceMotion) return { animate: false, opacity: 0.5 };
+  return { animate: true, opacity: 0.3, from: 0.3, to: 0.7 };
+}

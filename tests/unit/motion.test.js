@@ -55,3 +55,15 @@ describe("entranceDuration", () => {
     expect(entranceDuration(true)).toBe(0);
   });
 });
+
+describe("skeletonPulse", () => {
+  const { skeletonPulse } = require("../../src/utils/motion");
+
+  test("com reduzir movimento, opacidade fixa e sem laço", () => {
+    expect(skeletonPulse(true)).toEqual({ animate: false, opacity: 0.5 });
+  });
+
+  test("sem reduzir movimento, pulsa entre 0,3 e 0,7", () => {
+    expect(skeletonPulse(false)).toEqual({ animate: true, opacity: 0.3, from: 0.3, to: 0.7 });
+  });
+});
