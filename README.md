@@ -13,6 +13,8 @@ npx expo start
 ```
 
 - `EXPO_PUBLIC_API_URL`: endereço da API (padrão `https://api.agendaflui.com.br`).
+- `EXPO_PUBLIC_APP_STORE_URL` e `EXPO_PUBLIC_PLAY_STORE_URL`: páginas do app na App Store e no Google Play (só `https://`). Sem elas, a web não mostra os botões de baixar.
+- `EXPO_PUBLIC_PAINEL_URL`: painel completo da equipe (padrão `https://painel.agendaflui.com.br`).
 
 ## Como entrar numa loja
 

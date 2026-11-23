@@ -1,11 +1,12 @@
 import React, { useRef, useState } from "react";
-import { View, Text, Linking, StyleSheet } from "react-native";
+import { View, Text, Linking, Platform, StyleSheet } from "react-native";
 import { login } from "../api/auth";
 import { useAuth } from "../components/AuthProvider";
 import EntryLayout from "../components/entry/EntryLayout";
 import Field from "../components/entry/Field";
 import FormMessage from "../components/entry/FormMessage";
 import Button from "../components/ui/Button";
+import StoreBadges from "../components/entry/StoreBadges";
 import { validateEmail } from "../utils/helpers";
 import { useTheme } from "../utils/ThemeContext";
 import { config } from "../config";
@@ -111,6 +112,13 @@ export default function LoginScreen({ navigation, route }) {
         </Text>
       </View>
 
+      {Platform.OS === "web" && (config.appStoreUrl || config.playStoreUrl) ? (
+        <View style={styles.app}>
+          <StoreBadges />
+          <Text style={styles.appNote}>No app você recebe os avisos dos seus horários.</Text>
+        </View>
+      ) : null}
+
       <Text style={styles.legal}>
         Ao continuar, você aceita os{" "}
         <Text style={styles.legalLink} onPress={() => Linking.openURL(config.termsUrl).catch(() => {})}>
@@ -131,6 +139,8 @@ const getStyles = (theme) =>
     links: { marginTop: 24, gap: 12 },
     linkLine: { ...type.body, color: theme.colors.inkMuted, textAlign: "center" },
     link: { fontFamily: fonts.textSemi, color: theme.colors.brandText },
+    app: { marginTop: 24 },
+    appNote: { ...type.small, color: theme.colors.inkMuted, textAlign: "center", marginTop: 12 },
     legal: { ...type.caption, color: theme.colors.inkMuted, textAlign: "center", marginTop: 24 },
     legalLink: { color: theme.colors.brandText, textDecorationLine: "underline" },
   });
