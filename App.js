@@ -261,11 +261,10 @@ export default function App() {
 
   if (!fontsLoaded) {
     return (
-      <BusinessProvider>
-        <ThemeProvider>
-          <LoadingScreen />
-        </ThemeProvider>
-      </BusinessProvider>
+      // Sem BusinessProvider aqui: ele monta uma vez só, abaixo, para o link de loja não ser tratado em dobro.
+      <ThemeProvider>
+        <LoadingScreen />
+      </ThemeProvider>
     );
   }
 
