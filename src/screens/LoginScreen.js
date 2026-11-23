@@ -130,7 +130,7 @@ const getStyles = (theme) =>
   StyleSheet.create({
     links: { marginTop: 24, gap: 12 },
     linkLine: { ...type.body, color: theme.colors.inkMuted, textAlign: "center" },
-    link: { fontFamily: fonts.textSemi, color: theme.colors.brand },
+    link: { fontFamily: fonts.textSemi, color: theme.colors.brandText },
     legal: { ...type.caption, color: theme.colors.inkMuted, textAlign: "center", marginTop: 24 },
-    legalLink: { color: theme.colors.brand, textDecorationLine: "underline" },
+    legalLink: { color: theme.colors.brandText, textDecorationLine: "underline" },
   });

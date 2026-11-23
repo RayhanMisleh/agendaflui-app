@@ -208,17 +208,19 @@ export default function App() {
 
   if (!fontsLoaded) {
     return (
-      <ThemeProvider>
-        <LoadingScreen />
-      </ThemeProvider>
+      <BusinessProvider>
+        <ThemeProvider>
+          <LoadingScreen />
+        </ThemeProvider>
+      </BusinessProvider>
     );
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.light.ground }}>
       <SafeAreaProvider style={{ backgroundColor: colors.light.ground }}>
-        <ThemeProvider>
-          <BusinessProvider>
+        <BusinessProvider>
+          <ThemeProvider>
             <AuthProvider>
               <NavigationContainer
                 ref={navigationRef}
@@ -231,8 +233,8 @@ export default function App() {
 
               <Toast />
             </AuthProvider>
-          </BusinessProvider>
-        </ThemeProvider>
+          </ThemeProvider>
+        </BusinessProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

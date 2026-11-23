@@ -183,5 +183,5 @@ export default function RecuperarSenhaScreen({ navigation }) {
 const getStyles = (theme) =>
   StyleSheet.create({
     linkLine: { ...type.body, color: theme.colors.inkMuted, textAlign: "center", marginTop: 24 },
-    link: { fontFamily: fonts.textSemi, color: theme.colors.brand },
+    link: { fontFamily: fonts.textSemi, color: theme.colors.brandText },
   });
