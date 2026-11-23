@@ -127,7 +127,7 @@ const RootNavigator = () => {
     };
   }, [isAuthenticated, isStaff, storeName]);
 
-  // Equipe: o aparelho é registrado na entrada; aqui só os avisos. Tocar num aviso leva à agenda (a Task 6 leva ao atendimento).
+  // Equipe: o aparelho é registrado na entrada; aqui só os avisos. Tocar num aviso abre o atendimento, com a agenda por baixo.
   useEffect(() => {
     if (!isStaff || staffStatus !== "ready") return undefined;
     const received = Notifications.addNotificationReceivedListener((notification) => {
@@ -143,7 +143,11 @@ const RootNavigator = () => {
     const tapped = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
       if (data && data.appointmentId && navigationRef.isReady()) {
-        navigationRef.navigate(ROUTES.Equipe, { screen: ROUTES.EquipeTabs, params: { screen: ROUTES.AgendaEquipe } });
+        navigationRef.navigate(ROUTES.Equipe, {
+          screen: ROUTES.Atendimento,
+          params: { appointmentId: String(data.appointmentId) },
+          initial: false,
+        });
       }
     });
     return () => {

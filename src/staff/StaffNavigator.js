@@ -11,6 +11,8 @@ import LoadingScreen from "../components/LoadingScreen";
 import { useStaffSession } from "./StaffSessionProvider";
 import AgendaEquipeScreen from "./screens/AgendaEquipeScreen";
 import PerfilEquipeScreen from "./screens/PerfilEquipeScreen";
+import AtendimentoScreen from "./screens/AtendimentoScreen";
+import RemarcarScreen from "./screens/RemarcarScreen";
 import { fonts, type } from "../theme/tokens";
 
 const Tab = createBottomTabNavigator();
@@ -79,6 +81,8 @@ export default function StaffNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false, cardStyle: { backgroundColor: theme.colors.ground } }}>
       <Stack.Screen name={ROUTES.EquipeTabs} component={StaffTabs} />
+      <Stack.Screen name={ROUTES.Atendimento} component={AtendimentoScreen} />
+      <Stack.Screen name={ROUTES.Remarcar} component={RemarcarScreen} />
     </Stack.Navigator>
   );
 }
