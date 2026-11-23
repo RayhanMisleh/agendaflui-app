@@ -1,4 +1,4 @@
-const KEY = "agendaflui.session";
+const DEFAULT_KEY = "agendaflui.session";
 const FIELDS = ["accessToken", "accessExpiresAt", "refreshToken", "refreshExpiresAt"];
 
 function pick(source) {
@@ -12,7 +12,7 @@ function isTokens(value) {
 }
 
 // Tokens no armazenamento seguro, num único JSON com a loja a que pertencem. Os tokens só valem para essa loja.
-export function createTokenStore(storage) {
+export function createTokenStore(storage, { key: KEY = DEFAULT_KEY } = {}) {
   async function clear() {
     try {
       await storage.removeItem(KEY);
@@ -69,10 +69,23 @@ export function createSessionTokens(store, getSlug) {
     await persist(kept);
   }
 
+  // Grava para uma loja que ainda não é a ativa (a equipe entra antes de a loja ser escolhida).
+  async function setFor(slug, tokens) {
+    const kept = pick(tokens);
+    memory = { slug, tokens: kept };
+    generation += 1;
+    try {
+      await store.save(slug, kept);
+    } catch (error) {
+      // sem gravar, a sessão vale até o app fechar
+    }
+  }
+
   return {
     get: () => (memory && memory.slug === getSlug() ? memory.tokens : null),
     generation: () => generation,
     set,
+    setFor,
     // Grava só se nada (sair, entrar, trocar de loja) aconteceu desde que `gen` foi lida. Devolve se gravou.
     async setIf(gen, tokens) {
       if (gen !== generation) return false;

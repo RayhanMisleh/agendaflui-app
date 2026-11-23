@@ -45,6 +45,23 @@ jest.mock("../../src/api", () => {
   return { api: client, __adapter: adapter };
 });
 
+jest.mock("../../src/staff/api", () => {
+  const { createApiClient } = jest.requireActual("../../src/api/client");
+  const { fakeAdapter } = jest.requireActual("../helpers/fake-adapter");
+  const adapter = fakeAdapter((call) => mockHandler(call));
+  const client = createApiClient({
+    baseURL: "https://api.test/v1",
+    getSlug: () => "patas",
+    tokens: { get: () => null, set: async () => {}, clear: async () => {} },
+    authPrefix: "/auth/staff/",
+    refreshPath: "/auth/staff/refresh",
+    onSessionEnded: () => {},
+    onBusinessGone: () => {},
+    adapter,
+  });
+  return { staffApi: client, __adapter: adapter };
+});
+
 const adapter = require("../../src/api").__adapter;
 
 beforeEach(async () => {
@@ -107,5 +124,48 @@ describe("registerDevice", () => {
     mockHandler = async () => ({ status: 500, data: { error: { code: "internal", message: "x" } } });
     await expect(registerDevice()).resolves.toBeNull();
     expect(await AsyncStorage.getItem(PUSH_TOKEN_KEY)).toBeNull();
+  });
+});
+
+describe("aparelho da equipe", () => {
+  const staffAdapter = require("../../src/staff/api").__adapter;
+  const STAFF_KEY = "agendaflui.staffPushToken";
+
+  beforeEach(() => {
+    staffAdapter.calls.length = 0;
+  });
+
+  test("registra em /staff/devices pelo cliente da equipe e guarda o token em chave própria", async () => {
+    await expect(registerDevice({ target: "staff" })).resolves.toBe("ExponentPushToken[abc]");
+    expect(adapter.calls).toHaveLength(0);
+    expect(staffAdapter.calls).toHaveLength(1);
+    expect(staffAdapter.calls[0].method).toBe("POST");
+    expect(staffAdapter.calls[0].url).toBe("/staff/devices");
+    expect(staffAdapter.calls[0].data).toEqual({ platform: "ios", pushToken: "ExponentPushToken[abc]" });
+    expect(await AsyncStorage.getItem(STAFF_KEY)).toBe("ExponentPushToken[abc]");
+    expect(await AsyncStorage.getItem(PUSH_TOKEN_KEY)).toBeNull();
+  });
+
+  test("sai do aparelho em /staff/devices/{token} e esquece a chave da equipe", async () => {
+    await AsyncStorage.setItem(STAFF_KEY, "ExponentPushToken[abc]");
+    await AsyncStorage.setItem(PUSH_TOKEN_KEY, "ExponentPushToken[cli]");
+    await unregisterDevice({ target: "staff" });
+    expect(adapter.calls).toHaveLength(0);
+    expect(staffAdapter.calls).toHaveLength(1);
+    expect(staffAdapter.calls[0].method).toBe("DELETE");
+    expect(staffAdapter.calls[0].url).toBe("/staff/devices/ExponentPushToken%5Babc%5D");
+    expect(await AsyncStorage.getItem(STAFF_KEY)).toBeNull();
+    expect(await AsyncStorage.getItem(PUSH_TOKEN_KEY)).toBe("ExponentPushToken[cli]");
+  });
+
+  test("sem token da equipe guardado, não chama a rede", async () => {
+    await unregisterDevice({ target: "staff" });
+    expect(staffAdapter.calls).toHaveLength(0);
+  });
+
+  test("falha do servidor da equipe não lança nem guarda o token", async () => {
+    mockHandler = async () => ({ status: 500, data: { error: { code: "internal", message: "x" } } });
+    await expect(registerDevice({ target: "staff" })).resolves.toBeNull();
+    expect(await AsyncStorage.getItem(STAFF_KEY)).toBeNull();
   });
 });
