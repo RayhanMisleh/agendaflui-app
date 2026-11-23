@@ -35,6 +35,11 @@ export function formatDay(date) {
   return utcDay(date).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 }
 
+// Dia da semana abreviado ("seg", "ter"...), sem ponto.
+export function weekdayShort(date) {
+  return utcDay(date).toLocaleDateString("pt-BR", { weekday: "short", timeZone: "UTC" }).replace(".", "");
+}
+
 export function dayParts(date) {
   const day = utcDay(date);
   return {

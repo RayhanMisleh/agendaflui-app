@@ -1,4 +1,4 @@
-import { blockInput, contactLinks } from "../../src/staff/forms";
+import { blockInput, contactLinks, dayStrip } from "../../src/staff/forms";
 
 const form = (extra = {}) => ({ professionalId: "p1", date: "2026-11-24", start: "09:00", end: "10:30", reason: "", ...extra });
 
@@ -69,5 +69,24 @@ describe("contactLinks", () => {
 
   test("usa o próprio número quando não há rótulo", () => {
     expect(contactLinks({ phone: "11912345678" })[0].label).toBe("11912345678");
+  });
+});
+
+describe("dayStrip", () => {
+  test("vai de hoje a 60 dias à frente, com dia da semana abreviado", () => {
+    const strip = dayStrip("2026-11-24");
+    expect(strip).toHaveLength(61);
+    expect(strip[0]).toEqual({ date: "2026-11-24", weekday: "ter", day: "24", month: "nov" });
+    expect(strip[60].date).toBe("2027-01-23");
+  });
+
+  test("dia escolhido fora da faixa entra na frente; dentro dela, não duplica", () => {
+    expect(dayStrip("2026-11-24", "2026-11-20")[0].date).toBe("2026-11-20");
+    expect(dayStrip("2026-11-24", "2026-11-20")).toHaveLength(62);
+    expect(dayStrip("2026-11-24", "2026-12-01")).toHaveLength(61);
+  });
+
+  test("cada dia da faixa passa na validação do bloqueio", () => {
+    dayStrip("2026-11-24").forEach(({ date }) => expect(blockInput(form({ date })).ok).toBe(true));
   });
 });

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import Toast from "react-native-toast-message";
 import { createTimeBlock, listStaffProfessionals } from "../../api/staff";
@@ -8,13 +8,13 @@ import { useTheme } from "../../utils/ThemeContext";
 import { localDateIn } from "../../utils/time";
 import { useStaffSession } from "../StaffSessionProvider";
 import { canFilterProfessionals } from "../agenda";
-import { blockInput } from "../forms";
+import { blockInput, dayStrip } from "../forms";
 import ScreenHeader from "../components/ScreenHeader";
 import Button from "../../components/ui/Button";
 import Chip from "../../components/ui/Chip";
 import Field from "../../components/entry/Field";
 import FormMessage from "../../components/entry/FormMessage";
-import { type } from "../../theme/tokens";
+import { fonts, radius, type } from "../../theme/tokens";
 
 // Bloquear horário: o profissional fica sem agenda num trecho do dia. O próprio profissional só bloqueia a si mesmo.
 export default function BloquearHorarioScreen() {
@@ -58,6 +58,9 @@ export default function BloquearHorarioScreen() {
       cancelled = true;
     };
   }, [canChoose]);
+
+  const today = localDateIn(timeZone, new Date());
+  const days = React.useMemo(() => dayStrip(today, date), [today, date]);
 
   const submit = async () => {
     if (saving) return;
@@ -114,7 +117,29 @@ export default function BloquearHorarioScreen() {
                 {fieldErrors.professionalId ? <Text style={styles.error}>{fieldErrors.professionalId}</Text> : null}
               </View>
             ) : null}
-            <Field label="Dia" value={date} onChangeText={setDate} placeholder="AAAA-MM-DD" hint="Exemplo: 2026-11-24" error={fieldErrors.date} autoCapitalize="none" autoCorrect={false} keyboardType="numbers-and-punctuation" />
+            <View style={styles.group}>
+              <Text style={styles.label}>Dia</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.days} keyboardShouldPersistTaps="handled">
+                {days.map((item) => {
+                  const selected = item.date === date;
+                  return (
+                    <Pressable
+                      key={item.date}
+                      onPress={() => setDate(item.date)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${item.weekday}, ${item.day} de ${item.month}`}
+                      accessibilityState={{ selected }}
+                      style={[styles.day, selected ? styles.daySelected : null]}
+                    >
+                      <Text style={[styles.dayWeek, selected ? styles.dayTextSelected : null]}>{item.weekday}</Text>
+                      <Text style={[styles.dayNumber, selected ? styles.dayTextSelected : null]}>{item.day}</Text>
+                      <Text style={[styles.dayWeek, selected ? styles.dayTextSelected : null]}>{item.month}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              {fieldErrors.date ? <Text style={styles.error}>{fieldErrors.date}</Text> : null}
+            </View>
             <Field label="Início" value={start} onChangeText={setStart} placeholder="09:00" error={fieldErrors.start} autoCorrect={false} keyboardType="numbers-and-punctuation" />
             <Field label="Fim" value={end} onChangeText={setEnd} placeholder="10:00" hint="Use 24:00 para ir até o fim do dia." error={fieldErrors.end} autoCorrect={false} keyboardType="numbers-and-punctuation" />
             <Field label="Motivo (opcional)" value={reason} onChangeText={setReason} maxLength={200} error={fieldErrors.reason} />
@@ -133,5 +158,11 @@ const getStyles = (theme) =>
     group: { marginBottom: 16 },
     label: { ...type.small, color: theme.colors.ink, marginBottom: 8 },
     chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    days: { gap: 8, paddingVertical: 2 },
+    day: { width: 56, paddingVertical: 8, alignItems: "center", borderRadius: radius.sm, borderWidth: 1, borderColor: theme.colors.line, backgroundColor: theme.colors.surface },
+    daySelected: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+    dayWeek: { ...type.caption, color: theme.colors.inkMuted },
+    dayNumber: { fontFamily: fonts.displaySemi, fontSize: 20, lineHeight: 26, color: theme.colors.ink },
+    dayTextSelected: { color: theme.colors.onBrand },
     error: { ...type.small, color: theme.colors.danger, marginTop: 6 },
   });

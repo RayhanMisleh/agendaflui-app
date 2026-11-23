@@ -1,4 +1,6 @@
 // Validação dos formulários da equipe, sem rede. Mensagens em pt-BR, uma por campo.
+import { addDays, dayParts, weekdayShort } from "../utils/time";
+
 const TIME = /^(\d{2}):(\d{2})$/;
 const REASON_MAX = 200;
 
@@ -19,6 +21,17 @@ function validDate(value) {
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
 }
 
+// Faixa de dias para escolher: de hoje a 60 dias à frente (inclusive). Um dia escolhido fora da faixa entra na frente.
+export function dayStrip(today, selected, days = 60) {
+  const list = [];
+  for (let i = 0; i <= days; i += 1) list.push(addDays(today, i));
+  if (selected && validDate(selected) && !list.includes(selected)) list.unshift(selected);
+  return list.map((date) => {
+    const parts = dayParts(date);
+    return { date, weekday: weekdayShort(date), day: parts.day, month: parts.month };
+  });
+}
+
 // Corpo de POST /v1/staff/time-blocks (um dia só). Fim '24:00' vale; motivo vazio vira null.
 export function blockInput(form) {
   const fields = {};
@@ -29,7 +42,7 @@ export function blockInput(form) {
   const reason = String((form && form.reason) || "").trim();
 
   if (!professionalId) fields.professionalId = "Escolha quem fica sem agenda.";
-  if (!validDate(date)) fields.date = "Informe o dia como AAAA-MM-DD.";
+  if (!validDate(date)) fields.date = "Escolha o dia.";
   const startMin = minutes(start);
   const endMin = minutes(end, { allowEnd: true });
   if (startMin === null) fields.start = "Informe a hora de início como HH:MM.";
