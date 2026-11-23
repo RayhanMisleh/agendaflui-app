@@ -21,6 +21,10 @@ npx expo start
 - Link `agendaflui://loja/<slug>` no celular, ou `/<slug>` na web.
 - Ou digitando o código da loja na primeira tela.
 
+- Na primeira tela, "Sou cliente" pede o link ou o código da loja; "Sou da equipe" entra com e-mail e senha do painel e já cai na loja da pessoa, com a marca dela. A equipe vê agenda e perfil (gestão fica em "Abrir painel completo").
+
+O aparelho guarda um modo por vez (cliente ou equipe). Entrar num modo apaga a sessão do outro. Com a equipe logada, link de loja é ignorado ("Saia da conta da equipe para entrar como cliente.").
+
 Trocar de loja apaga a sessão, o carrinho e o aparelho de push da loja anterior.
 
 ## Testes e verificação

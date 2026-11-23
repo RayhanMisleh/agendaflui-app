@@ -7,6 +7,8 @@ import {
   MAIN_STACK_ROUTES,
   PRODUCTS_STACK_ROUTES,
   ORDERS_STACK_ROUTES,
+  STAFF_STACK_ROUTES,
+  STAFF_TAB_ROUTES,
   BOOKING_STEPS,
   initialRootRoute,
 } from "../../src/navigation/routes";
@@ -25,8 +27,10 @@ describe("manifesto de rotas", () => {
   test("listas fixas", () => {
     expect(ROOT_ROUTES).toEqual([
       "CodigoLoja", "Intro", "Navigator", "Login", "SignUp", "RecuperarSenha",
-      "NewUserEmailCode", "ConfirmarExclusao",
+      "NewUserEmailCode", "ConfirmarExclusao", "BoasVindas", "EntradaEquipe", "Equipe",
     ]);
+    expect(STAFF_STACK_ROUTES).toEqual(["EquipeTabs", "Atendimento", "Remarcar", "BloquearHorario", "ClienteEquipe"]);
+    expect(STAFF_TAB_ROUTES).toEqual(["AgendaEquipe", "PerfilEquipe"]);
     expect(TAB_ROUTES).toEqual(["Agendar", "Loja", "Perfil"]);
     expect(MAIN_STACK_ROUTES).toEqual([
       "MainTabs", "AppointmentSuccess", "HistoricoAgendamentos", "AlterarSenha",
@@ -44,6 +48,8 @@ describe("manifesto de rotas", () => {
       "Perfil", "AppointmentSuccess", "HistoricoAgendamentos", "AlterarSenha",
       "MeusPedidos", "Carrinho", "RedemptionSuccess", "MinhaJornada",
       "ProductsList", "SingleProduct", "MeusPedidosList", "PedidoDetalhes",
+      "BoasVindas", "EntradaEquipe", "Equipe", "EquipeTabs", "Atendimento", "Remarcar",
+      "BloquearHorario", "ClienteEquipe", "AgendaEquipe", "PerfilEquipe",
     ]);
     for (const [key, value] of Object.entries(ROUTES)) expect(value).toBe(key);
   });
@@ -57,6 +63,13 @@ describe("manifesto de rotas", () => {
     expect(sequence("src/screens/Navigator.js", "Stack")).toEqual(MAIN_STACK_ROUTES);
   });
 
+  test("as abas da equipe seguem o manifesto e a pilha da equipe começa pelas abas", () => {
+    expect(sequence("src/staff/StaffNavigator.js", "Tab")).toEqual(STAFF_TAB_ROUTES);
+    const stack = sequence("src/staff/StaffNavigator.js", "Stack");
+    expect(stack).toEqual(STAFF_STACK_ROUTES.slice(0, stack.length));
+    expect(stack[0]).toBe("EquipeTabs");
+  });
+
   test("as pilhas da Loja e de Pedidos seguem o manifesto", () => {
     expect(sequence("src/screens/ProductsStack.js", "Stack")).toEqual(PRODUCTS_STACK_ROUTES);
     expect(sequence("src/screens/MeusPedidosStack.js", "Stack")).toEqual(ORDERS_STACK_ROUTES);
@@ -64,10 +77,19 @@ describe("manifesto de rotas", () => {
 });
 
 describe("primeira tela da pilha raiz", () => {
-  test("sem loja escolhida abre CodigoLoja, na web e no celular", () => {
+  test("sem loja escolhida abre BoasVindas, na web e no celular", () => {
     for (const platform of ["web", "ios", "android"]) {
       for (const isAuthenticated of [true, false]) {
-        expect(initialRootRoute({ platform, hasBusiness: false, isAuthenticated })).toBe("CodigoLoja");
+        expect(initialRootRoute({ platform, hasBusiness: false, isAuthenticated })).toBe("BoasVindas");
+        expect(initialRootRoute({ platform, hasBusiness: false, isAuthenticated, mode: "customer" })).toBe("BoasVindas");
+      }
+    }
+  });
+
+  test("modo equipe abre Equipe, em qualquer plataforma", () => {
+    for (const platform of ["web", "ios", "android"]) {
+      for (const isAuthenticated of [true, false]) {
+        expect(initialRootRoute({ platform, hasBusiness: true, isAuthenticated, mode: "staff" })).toBe("Equipe");
       }
     }
   });

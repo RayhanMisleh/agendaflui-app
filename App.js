@@ -26,6 +26,10 @@ import SignUpScreen from "./src/screens/SignUpScreen";
 import RecuperarSenhaScreen from "./src/screens/RecuperarSenhaScreen";
 import NewUserEmailCodeScreen from "./src/screens/NewUserEmailCodeScreen";
 import ConfirmarExclusaoScreen from "./src/screens/ConfirmarExclusaoScreen";
+import BoasVindasScreen from "./src/screens/BoasVindasScreen";
+import EntradaEquipeScreen from "./src/staff/screens/EntradaEquipeScreen";
+import StaffNavigator from "./src/staff/StaffNavigator";
+import { StaffSessionProvider, useStaffSession } from "./src/staff/StaffSessionProvider";
 import { AuthProvider, useAuth } from "./src/components/AuthProvider";
 import { BusinessProvider, useBusiness } from "./src/business/BusinessProvider";
 import LoadingScreen from "./src/components/LoadingScreen";
@@ -46,12 +50,18 @@ const navigationRef = createNavigationContainerRef();
 // A loja escolhida não responde (suspensa ou sem rede e sem dados guardados).
 const LojaIndisponivel = () => {
   const { theme } = useTheme();
-  const { reload, switchBusiness } = useBusiness();
+  const { reload, switchBusiness, mode } = useBusiness();
+  const { signOut } = useStaffSession();
+  const isStaff = mode === "staff";
   return (
     <View style={[styles.unavailable, { backgroundColor: theme.colors.ground }]}>
       <Text style={[styles.unavailableTitle, { color: theme.colors.ink }]}>Esta loja não está disponível agora.</Text>
       <Button title="Tentar de novo" onPress={reload} fullWidth style={styles.unavailableButton} />
-      <Button title="Escolher outra loja" variant="outline" onPress={switchBusiness} fullWidth style={styles.unavailableButton} />
+      {isStaff ? (
+        <Button title="Sair da conta da equipe" variant="outline" onPress={signOut} fullWidth style={styles.unavailableButton} />
+      ) : (
+        <Button title="Escolher outra loja" variant="outline" onPress={switchBusiness} fullWidth style={styles.unavailableButton} />
+      )}
     </View>
   );
 };
@@ -64,7 +74,9 @@ const styles = StyleSheet.create({
 
 const RootNavigator = () => {
   const { isAuthenticated, isLoading } = useAuth();
-  const { status, business } = useBusiness();
+  const { status, business, mode } = useBusiness();
+  const { status: staffStatus } = useStaffSession();
+  const isStaff = mode === "staff";
   const storeName = business ? business.name : "Agenda Flui";
   const { theme } = useTheme();
   const { isDarkMode } = theme;
@@ -76,7 +88,7 @@ const RootNavigator = () => {
 
   // Inicializar push notifications quando o usuário estiver autenticado
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !isStaff) {
       // O servidor aceita o mesmo aparelho de novo; sem projectId do EAS ou em simulador, não registra e não mostra erro.
       registerDevice();
 
@@ -113,7 +125,32 @@ const RootNavigator = () => {
         responseListener.current.remove();
       }
     };
-  }, [isAuthenticated, storeName]);
+  }, [isAuthenticated, isStaff, storeName]);
+
+  // Equipe: o aparelho é registrado na entrada; aqui só os avisos. Tocar num aviso leva à agenda (a Task 6 leva ao atendimento).
+  useEffect(() => {
+    if (!isStaff || staffStatus !== "ready") return undefined;
+    const received = Notifications.addNotificationReceivedListener((notification) => {
+      const { title, body } = notification.request.content;
+      Toast.show({
+        type: "info",
+        text1: storeName,
+        text2: [title, body].filter(Boolean).join(": "),
+        visibilityTime: 5000,
+        topOffset: 60,
+      });
+    });
+    const tapped = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data;
+      if (data && data.appointmentId && navigationRef.isReady()) {
+        navigationRef.navigate(ROUTES.Equipe, { screen: ROUTES.EquipeTabs, params: { screen: ROUTES.AgendaEquipe } });
+      }
+    });
+    return () => {
+      received.remove();
+      tapped.remove();
+    };
+  }, [isStaff, staffStatus, storeName]);
 
   // Disable zoom and scroll bounce on web, and fix root background color
   useEffect(() => {
@@ -169,10 +206,10 @@ const RootNavigator = () => {
         }),
       }} 
       // A pilha recomeça ao escolher ou trocar de loja: as telas mudam e a primeira tela precisa existir.
-      key={status === "none" ? "sem-loja" : "com-loja"}
-      initialRouteName={initialRootRoute({ platform: Platform.OS, hasBusiness: status !== "none", isAuthenticated })}
+      key={isStaff ? "equipe" : status === "none" ? "sem-loja" : "com-loja"}
+      initialRouteName={initialRootRoute({ platform: Platform.OS, hasBusiness: status !== "none", isAuthenticated, mode })}
     >
-      {status === "none" ? (
+      {isStaff ? null : status === "none" ? (
         <Stack.Screen name={ROUTES.CodigoLoja} component={CodigoLojaScreen} />
       ) : (
         <>
@@ -185,6 +222,13 @@ const RootNavigator = () => {
           <Stack.Screen name={ROUTES.ConfirmarExclusao} component={ConfirmarExclusaoScreen} />
         </>
       )}
+      {!isStaff && status === "none" ? (
+        <>
+          <Stack.Screen name={ROUTES.BoasVindas} component={BoasVindasScreen} />
+          <Stack.Screen name={ROUTES.EntradaEquipe} component={EntradaEquipeScreen} />
+        </>
+      ) : null}
+      {isStaff ? <Stack.Screen name={ROUTES.Equipe} component={StaffNavigator} /> : null}
     </Stack.Navigator>
     <StatusBar style={isDarkMode ? "light" : "dark"} backgroundColor="transparent" translucent={true} />
     </>
@@ -221,18 +265,20 @@ export default function App() {
       <SafeAreaProvider style={{ backgroundColor: colors.light.ground }}>
         <BusinessProvider>
           <ThemeProvider>
-            <AuthProvider>
-              <NavigationContainer
-                ref={navigationRef}
-                documentTitle={{
-                  formatter: () => "Agenda Flui",
-                }}
-              >
-                <RootNavigator />
-              </NavigationContainer>
+            <StaffSessionProvider>
+              <AuthProvider>
+                <NavigationContainer
+                  ref={navigationRef}
+                  documentTitle={{
+                    formatter: () => "Agenda Flui",
+                  }}
+                >
+                  <RootNavigator />
+                </NavigationContainer>
 
-              <Toast />
-            </AuthProvider>
+                <Toast />
+              </AuthProvider>
+            </StaffSessionProvider>
           </ThemeProvider>
         </BusinessProvider>
       </SafeAreaProvider>

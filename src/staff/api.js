@@ -15,6 +15,11 @@ export function setStaffSessionHandlers(next) {
   if (typeof next.onBusinessGone === "function") handlers.onBusinessGone = next.onBusinessGone;
 }
 
+// Para quem usa o cliente de clientes e descobre que a loja sumiu com a equipe logada.
+export function triggerStaffBusinessGone() {
+  handlers.onBusinessGone();
+}
+
 export const staffApi = createApiClient({
   baseURL: `${config.apiUrl}/v1`,
   getSlug: getActiveSlug,

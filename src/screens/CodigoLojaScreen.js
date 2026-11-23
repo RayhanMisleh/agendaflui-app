@@ -20,7 +20,7 @@ import { fonts, radius, type } from "../theme/tokens";
 const INVALID_CODE_MESSAGE = "Digite o código como a loja mandou: letras, números e hífen.";
 
 // Primeira tela sem link de loja: pede o código (o slug) e confere na API antes de seguir.
-export default function CodigoLojaScreen() {
+export default function CodigoLojaScreen({ navigation }) {
   const { theme } = useTheme();
   const { selectBusiness } = useBusiness();
   const styles = getStyles(theme);
@@ -56,7 +56,7 @@ export default function CodigoLojaScreen() {
               resizeMode="contain"
             />
             <Text style={styles.title}>Qual é a sua loja?</Text>
-            <Text style={styles.hint}>O código vem no link que a loja mandou para você.</Text>
+            <Text style={styles.hint}>Use o link ou o código da sua loja</Text>
 
             <Text style={styles.label}>Código da loja</Text>
             <TextInput
@@ -79,6 +79,9 @@ export default function CodigoLojaScreen() {
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
             <Button title="Continuar" onPress={handleContinue} loading={loading} fullWidth style={styles.button} />
+            {navigation && navigation.canGoBack() ? (
+              <Button title="Voltar" variant="ghost" onPress={() => navigation.goBack()} fullWidth style={styles.back} />
+            ) : null}
           </View>
         </View>
       </ScrollView>
@@ -109,4 +112,5 @@ const getStyles = (theme) =>
     inputError: { borderColor: theme.colors.danger },
     error: { ...type.small, color: theme.colors.danger, marginTop: 8 },
     button: { marginTop: 24 },
+    back: { marginTop: 8 },
   });
