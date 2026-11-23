@@ -33,7 +33,7 @@ import Button from "./src/components/ui/Button";
 import { registerDevice } from "./src/services/notificationService";
 import { useOrderLink } from "./src/store/useOrderLink";
 import { ThemeProvider, useTheme } from "./src/utils/ThemeContext";
-import { ROUTES } from "./src/navigation/routes";
+import { ROUTES, initialRootRoute } from "./src/navigation/routes";
 import { colors, type } from "./src/theme/tokens";
 import { clearLegacyStorage } from "./src/session/legacy";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -168,7 +168,9 @@ const RootNavigator = () => {
           }),
         }),
       }} 
-      initialRouteName={Platform.OS === "web" && !isAuthenticated ? ROUTES.Intro : ROUTES.Navigator}
+      // A pilha recomeça ao escolher ou trocar de loja: as telas mudam e a primeira tela precisa existir.
+      key={status === "none" ? "sem-loja" : "com-loja"}
+      initialRouteName={initialRootRoute({ platform: Platform.OS, hasBusiness: status !== "none", isAuthenticated })}
     >
       {status === "none" ? (
         <Stack.Screen name={ROUTES.CodigoLoja} component={CodigoLojaScreen} />

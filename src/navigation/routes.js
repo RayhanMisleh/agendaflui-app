@@ -15,3 +15,9 @@ export const MAIN_STACK_ROUTES = ["MainTabs", "AppointmentSuccess", "HistoricoAg
 export const PRODUCTS_STACK_ROUTES = ["ProductsList", "SingleProduct"];
 export const ORDERS_STACK_ROUTES = ["MeusPedidosList", "PedidoDetalhes"];
 export const BOOKING_STEPS = ["profissional", "servico", "data", "horario"];
+
+// Primeira tela da pilha raiz. Sem loja escolhida, a pilha só tem CodigoLoja; com loja, a web sem login abre na Intro.
+export function initialRootRoute({ platform, hasBusiness, isAuthenticated }) {
+  if (!hasBusiness) return ROUTES.CodigoLoja;
+  return platform === "web" && !isAuthenticated ? ROUTES.Intro : ROUTES.Navigator;
+}

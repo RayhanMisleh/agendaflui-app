@@ -8,6 +8,7 @@ import {
   PRODUCTS_STACK_ROUTES,
   ORDERS_STACK_ROUTES,
   BOOKING_STEPS,
+  initialRootRoute,
 } from "../../src/navigation/routes";
 
 const root = path.join(__dirname, "..", "..");
@@ -59,5 +60,28 @@ describe("manifesto de rotas", () => {
   test("as pilhas da Loja e de Pedidos seguem o manifesto", () => {
     expect(sequence("src/screens/ProductsStack.js", "Stack")).toEqual(PRODUCTS_STACK_ROUTES);
     expect(sequence("src/screens/MeusPedidosStack.js", "Stack")).toEqual(ORDERS_STACK_ROUTES);
+  });
+});
+
+describe("primeira tela da pilha raiz", () => {
+  test("sem loja escolhida abre CodigoLoja, na web e no celular", () => {
+    for (const platform of ["web", "ios", "android"]) {
+      for (const isAuthenticated of [true, false]) {
+        expect(initialRootRoute({ platform, hasBusiness: false, isAuthenticated })).toBe("CodigoLoja");
+      }
+    }
+  });
+
+  test("com loja: web sem login na Intro; logado ou no celular no Navigator", () => {
+    expect(initialRootRoute({ platform: "web", hasBusiness: true, isAuthenticated: false })).toBe("Intro");
+    expect(initialRootRoute({ platform: "web", hasBusiness: true, isAuthenticated: true })).toBe("Navigator");
+    expect(initialRootRoute({ platform: "ios", hasBusiness: true, isAuthenticated: false })).toBe("Navigator");
+    expect(initialRootRoute({ platform: "android", hasBusiness: true, isAuthenticated: true })).toBe("Navigator");
+  });
+
+  test("App.js usa a função e a tela escolhida sempre está na pilha", () => {
+    const app = read("App.js");
+    expect(app).toContain("initialRouteName={initialRootRoute(");
+    expect(app).not.toMatch(/initialRouteName=\{Platform/);
   });
 });
