@@ -40,6 +40,7 @@ import { ThemeProvider, useTheme } from "./src/utils/ThemeContext";
 import { useReduceMotion, stackScreenOptions } from "./src/utils/motion";
 import { withWebFrame } from "./src/components/WebFrame";
 import { ROUTES, initialRootRoute } from "./src/navigation/routes";
+import { appointmentTarget } from "./src/staff/notificationTarget";
 import { colors, type } from "./src/theme/tokens";
 import { clearLegacyStorage } from "./src/session/legacy";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -145,7 +146,7 @@ const RootNavigator = () => {
     };
   }, [isAuthenticated, isStaff, storeName]);
 
-  // Equipe: o aparelho é registrado na entrada; aqui só os avisos. Tocar num aviso abre o atendimento, com a agenda por baixo.
+  // Equipe: registra o aparelho e escuta os avisos. Tocar num aviso abre o atendimento, com a agenda por baixo.
   useEffect(() => {
     if (!isStaff || staffStatus !== "ready") return undefined;
     const received = Notifications.addNotificationReceivedListener((notification) => {
@@ -158,16 +159,23 @@ const RootNavigator = () => {
         topOffset: 60,
       });
     });
-    const tapped = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
-      if (data && data.appointmentId && navigationRef.isReady()) {
-        navigationRef.navigate(ROUTES.Equipe, {
-          screen: ROUTES.Atendimento,
-          params: { appointmentId: String(data.appointmentId) },
-          initial: false,
-        });
-      }
-    });
+    const openAppointment = (response) => {
+      const target = appointmentTarget(response);
+      if (target && navigationRef.isReady()) navigationRef.navigate(ROUTES.Equipe, target);
+    };
+    const tapped = Notifications.addNotificationResponseReceivedListener(openAppointment);
+    // O aparelho é registrado de novo a cada sessão pronta (o servidor aceita repetição); falha não aparece para a pessoa.
+    try {
+      Promise.resolve(registerDevice({ target: "staff" })).catch(() => {});
+    } catch (error) {
+      // segue
+    }
+    // Aviso que abriu o app com ele fechado.
+    Promise.resolve(Notifications.getLastNotificationResponseAsync())
+      .then((last) => {
+        if (last) openAppointment(last);
+      })
+      .catch(() => {});
     return () => {
       received.remove();
       tapped.remove();
