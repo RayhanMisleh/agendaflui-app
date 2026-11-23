@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } fr
 import { SafeAreaView } from "react-native-safe-area-context";
 import Button from "../components/ui/Button";
 import Icon from "../components/ui/Icon";
-import Skeleton from "../components/ui/Skeleton";
+import ListSkeleton from "../components/ui/ListSkeleton";
 import OrderStatusBadge from "../components/ui/OrderStatusBadge";
 import { useBusiness } from "../business/BusinessProvider";
 import { useTheme } from "../utils/ThemeContext";
@@ -104,11 +104,7 @@ const MeusPedidosScreen = ({ navigation }) => {
       </View>
 
       {loading ? (
-        <View style={styles.list}>
-          {[1, 2, 3].map((key) => (
-            <Skeleton key={key} width="100%" height={110} style={{ borderRadius: radius.lg, marginBottom: 12 }} />
-          ))}
-        </View>
+        <ListSkeleton rows={3} height={110} />
       ) : failed && orders.length === 0 ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyTitle, { color: c.ink }]}>Não deu para carregar</Text>

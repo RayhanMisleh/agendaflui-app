@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../utils/ThemeContext";
 import { listAppointments, cancelAppointment } from "../api/agenda";
@@ -8,7 +8,7 @@ import Avatar from "../components/ui/Avatar";
 import Icon from "../components/ui/Icon";
 import Chip from "../components/ui/Chip";
 import Button from "../components/ui/Button";
-import Skeleton from "../components/ui/Skeleton";
+import ListSkeleton from "../components/ui/ListSkeleton";
 import StatusBadge from "../components/ui/StatusBadge";
 import { fonts, radius, type } from "../theme/tokens";
 import { formatDay } from "../utils/time";
@@ -26,6 +26,7 @@ const HistoricoAgendamentosScreen = ({ navigation }) => {
   const [filter, setFilter] = useState("all");
   const [lists, setLists] = useState({ upcoming: EMPTY, past: EMPTY });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [failed, setFailed] = useState(null);
   const [cancelingId, setCancelingId] = useState(null);
@@ -41,8 +42,10 @@ const HistoricoAgendamentosScreen = ({ navigation }) => {
   const scopesFor = (value) => (value === "all" ? ["upcoming", "past"] : [value]);
 
   const load = useCallback(
-    async (value) => {
-      setLoading(true);
+    async (value, { pull = false } = {}) => {
+      // Esqueleto só no primeiro carregamento; puxar para atualizar mostra o indicador do sistema.
+      if (pull) setRefreshing(true);
+      else setLoading(true);
       setFailed(null);
       try {
         await Promise.all(scopesFor(value).map((scope) => fetchScope(scope, null)));
@@ -50,6 +53,7 @@ const HistoricoAgendamentosScreen = ({ navigation }) => {
         setFailed(error.message);
       } finally {
         setLoading(false);
+        setRefreshing(false);
       }
     },
     [fetchScope]
@@ -162,11 +166,7 @@ const HistoricoAgendamentosScreen = ({ navigation }) => {
       </View>
 
       {loading ? (
-        <View style={styles.list}>
-          {[1, 2, 3].map((key) => (
-            <Skeleton key={key} width="100%" height={150} style={{ borderRadius: radius.lg, marginBottom: 12 }} />
-          ))}
-        </View>
+        <ListSkeleton rows={3} height={150} />
       ) : failed ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyTitle, { color: c.ink }]}>Não deu para carregar</Text>
@@ -180,6 +180,7 @@ const HistoricoAgendamentosScreen = ({ navigation }) => {
           renderItem={renderItem}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(filter, { pull: true })} tintColor={c.brand} colors={[c.brand]} />}
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={[styles.emptyTitle, { color: c.ink }]}>Nenhum agendamento</Text>

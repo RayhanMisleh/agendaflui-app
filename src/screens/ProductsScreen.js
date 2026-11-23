@@ -131,7 +131,7 @@ const ProductsScreen = ({ navigation }) => {
     <SafeAreaView style={[styles.safe, { backgroundColor: c.ground }]} edges={["bottom"]}>
       {categories.length > 0 ? chips : null}
       {loading ? (
-        <View style={styles.skeletons}>
+        <View style={styles.skeletons} accessibilityRole="progressbar" accessibilityLabel="Carregando">
           {[1, 2, 3, 4].map((key) => (
             <Skeleton key={key} width={itemWidth} height={itemWidth + 70} style={{ borderRadius: radius.lg }} />
           ))}

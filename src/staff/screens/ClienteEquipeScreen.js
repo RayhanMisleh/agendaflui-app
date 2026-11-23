@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, RefreshControl } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import Toast from "react-native-toast-message";
 import { getStaffCustomer, listCustomerAppointments } from "../../api/staff";
@@ -10,18 +10,20 @@ import { contactLinks } from "../forms";
 import ScreenHeader from "../components/ScreenHeader";
 import StatusBadge from "../../components/ui/StatusBadge";
 import Skeleton from "../../components/ui/Skeleton";
+import ListSkeleton from "../../components/ui/ListSkeleton";
 import Button from "../../components/ui/Button";
 import Icon from "../../components/ui/Icon";
 import FormMessage from "../../components/entry/FormMessage";
 import { radius, type } from "../../theme/tokens";
 
 // Lista paginada por cursor de um recorte ("upcoming" ou "past") dos atendimentos do cliente.
-function useAppointments(customerId, scope) {
+// `refreshKey` muda ao puxar para atualizar: recarrega sem trocar a lista pelo esqueleto.
+function useAppointments(customerId, scope, refreshKey) {
   const [state, setState] = useState({ items: [], nextCursor: null, loading: true, error: "" });
 
   const load = useCallback(
     async (cursor) => {
-      setState((s) => ({ ...s, loading: true, error: "" }));
+      setState((s) => ({ ...s, loading: !(cursor === null && s.items.length > 0), error: "" }));
       try {
         const page = await listCustomerAppointments(customerId, { scope, cursor });
         setState((s) => ({ items: cursor ? [...s.items, ...page.items] : page.items, nextCursor: page.nextCursor || null, loading: false, error: "" }));
@@ -34,7 +36,7 @@ function useAppointments(customerId, scope) {
 
   useEffect(() => {
     load(null);
-  }, [load]);
+  }, [load, refreshKey]);
 
   return { ...state, more: () => state.nextCursor && !state.loading && load(state.nextCursor) };
 }
@@ -77,12 +79,13 @@ export default function ClienteEquipeScreen() {
   const [customer, setCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const upcoming = useAppointments(customerId, "upcoming");
-  const past = useAppointments(customerId, "past");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const upcoming = useAppointments(customerId, "upcoming", refreshKey);
+  const past = useAppointments(customerId, "past", refreshKey);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     getStaffCustomer(customerId)
       .then((data) => {
         if (!cancelled) setCustomer(data);
@@ -92,12 +95,21 @@ export default function ClienteEquipeScreen() {
         if (!cancelled) setError(failure.message);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [customerId]);
+  }, [customerId, refreshKey]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    setError("");
+    setRefreshKey((key) => key + 1);
+  };
 
   const open = async (url) => {
     try {
@@ -113,9 +125,7 @@ export default function ClienteEquipeScreen() {
   const body = () => {
     if (loading) {
       return (
-        <View style={styles.content}>
-          <Skeleton height={96} style={styles.skeleton} />
-        </View>
+        <ListSkeleton rows={1} height={96} />
       );
     }
     if (!customer) {
@@ -127,7 +137,7 @@ export default function ClienteEquipeScreen() {
       );
     }
     return (
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <View style={styles.profile}>
           <Text style={styles.name} accessibilityRole="header">
             {customer.name}

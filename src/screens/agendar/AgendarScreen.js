@@ -364,7 +364,7 @@ const AgendarScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={[styles.container, { paddingTop: insets.top, backgroundColor: c.ground }]}>
-        <View style={{ padding: 24 }}>
+        <View style={{ padding: 24 }} accessibilityRole="progressbar" accessibilityLabel="Carregando">
           <Skeleton width={200} height={28} style={{ marginBottom: 8 }} />
           <Skeleton width={140} height={16} style={{ marginBottom: 32 }} />
           <Skeleton width="100%" height={176} style={{ borderRadius: radius.lg, marginBottom: 16 }} />

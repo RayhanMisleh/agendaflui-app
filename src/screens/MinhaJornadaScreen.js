@@ -9,7 +9,7 @@ import { isModuleDisabled } from "../api/errors";
 import { confirmAction, notify } from "../utils/dialog";
 import Button from "../components/ui/Button";
 import Icon from "../components/ui/Icon";
-import Skeleton from "../components/ui/Skeleton";
+import ListSkeleton from "../components/ui/ListSkeleton";
 import RedemptionBadge from "../components/ui/RedemptionBadge";
 import { fonts, radius, type } from "../theme/tokens";
 
@@ -137,11 +137,7 @@ const MinhaJornadaScreen = ({ navigation }) => {
       </View>
 
       {loading ? (
-        <View style={styles.list}>
-          {[1, 2, 3].map((key) => (
-            <Skeleton key={key} width="100%" height={110} style={{ borderRadius: radius.lg, marginBottom: 12 }} />
-          ))}
-        </View>
+        <ListSkeleton rows={3} height={110} />
       ) : failed ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyTitle, { color: c.ink }]}>Não deu para carregar</Text>

@@ -38,6 +38,7 @@ import { registerDevice } from "./src/services/notificationService";
 import { useOrderLink } from "./src/store/useOrderLink";
 import { ThemeProvider, useTheme } from "./src/utils/ThemeContext";
 import { useReduceMotion, stackScreenOptions } from "./src/utils/motion";
+import { withWebFrame } from "./src/components/WebFrame";
 import { ROUTES, initialRootRoute } from "./src/navigation/routes";
 import { colors, type } from "./src/theme/tokens";
 import { clearLegacyStorage } from "./src/session/legacy";
@@ -46,6 +47,21 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Toast from "react-native-toast-message";
 
 const Stack = createStackNavigator();
+
+// Na web, cada tela entra numa coluna centrada: 480 px na entrada, 800 px no app.
+const Entry = {
+  CodigoLoja: withWebFrame(CodigoLojaScreen, "entry"),
+  Intro: withWebFrame(IntroScreen, "entry"),
+  Login: withWebFrame(LoginScreen, "entry"),
+  SignUp: withWebFrame(SignUpScreen, "entry"),
+  RecuperarSenha: withWebFrame(RecuperarSenhaScreen, "entry"),
+  NewUserEmailCode: withWebFrame(NewUserEmailCodeScreen, "entry"),
+  ConfirmarExclusao: withWebFrame(ConfirmarExclusaoScreen, "entry"),
+  BoasVindas: withWebFrame(BoasVindasScreen, "entry"),
+  EntradaEquipe: withWebFrame(EntradaEquipeScreen, "entry"),
+};
+const AppFrame = withWebFrame(Navigator, "app");
+const StaffFrame = withWebFrame(StaffNavigator, "app");
 const navigationRef = createNavigationContainerRef();
 
 // A loja escolhida não responde (suspensa ou sem rede e sem dados guardados).
@@ -203,25 +219,25 @@ const RootNavigator = () => {
       initialRouteName={initialRootRoute({ platform: Platform.OS, hasBusiness: status !== "none", isAuthenticated, mode })}
     >
       {isStaff ? null : status === "none" ? (
-        <Stack.Screen name={ROUTES.CodigoLoja} component={CodigoLojaScreen} />
+        <Stack.Screen name={ROUTES.CodigoLoja} component={Entry.CodigoLoja} />
       ) : (
         <>
-          {Platform.OS === "web" && <Stack.Screen name={ROUTES.Intro} component={IntroScreen} />}
-          <Stack.Screen name={ROUTES.Navigator} component={Navigator} />
-          <Stack.Screen name={ROUTES.Login} component={LoginScreen} />
-          <Stack.Screen name={ROUTES.SignUp} component={SignUpScreen} />
-          <Stack.Screen name={ROUTES.RecuperarSenha} component={RecuperarSenhaScreen} />
-          <Stack.Screen name={ROUTES.NewUserEmailCode} component={NewUserEmailCodeScreen} />
-          <Stack.Screen name={ROUTES.ConfirmarExclusao} component={ConfirmarExclusaoScreen} />
+          {Platform.OS === "web" && <Stack.Screen name={ROUTES.Intro} component={Entry.Intro} />}
+          <Stack.Screen name={ROUTES.Navigator} component={AppFrame} />
+          <Stack.Screen name={ROUTES.Login} component={Entry.Login} />
+          <Stack.Screen name={ROUTES.SignUp} component={Entry.SignUp} />
+          <Stack.Screen name={ROUTES.RecuperarSenha} component={Entry.RecuperarSenha} />
+          <Stack.Screen name={ROUTES.NewUserEmailCode} component={Entry.NewUserEmailCode} />
+          <Stack.Screen name={ROUTES.ConfirmarExclusao} component={Entry.ConfirmarExclusao} />
         </>
       )}
       {!isStaff && status === "none" ? (
         <>
-          <Stack.Screen name={ROUTES.BoasVindas} component={BoasVindasScreen} />
-          <Stack.Screen name={ROUTES.EntradaEquipe} component={EntradaEquipeScreen} />
+          <Stack.Screen name={ROUTES.BoasVindas} component={Entry.BoasVindas} />
+          <Stack.Screen name={ROUTES.EntradaEquipe} component={Entry.EntradaEquipe} />
         </>
       ) : null}
-      {isStaff ? <Stack.Screen name={ROUTES.Equipe} component={StaffNavigator} /> : null}
+      {isStaff ? <Stack.Screen name={ROUTES.Equipe} component={StaffFrame} /> : null}
     </Stack.Navigator>
     <StatusBar style={isDarkMode ? "light" : "dark"} backgroundColor="transparent" translucent={true} />
     </>

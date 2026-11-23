@@ -9,7 +9,7 @@ import { ROUTES } from "../../navigation/routes";
 import { useStaffSession } from "../StaffSessionProvider";
 import { agendaRange, agendaDays, agendaTimeline, canFilterProfessionals, shiftDate } from "../agenda";
 import StatusBadge from "../../components/ui/StatusBadge";
-import Skeleton from "../../components/ui/Skeleton";
+import ListSkeleton from "../../components/ui/ListSkeleton";
 import Button from "../../components/ui/Button";
 import Chip from "../../components/ui/Chip";
 import Icon from "../../components/ui/Icon";
@@ -157,10 +157,7 @@ export default function AgendaEquipeScreen() {
     return (
       <View style={styles.container}>
         {header}
-        <View style={styles.list}>
-          <Skeleton height={72} style={styles.skeleton} />
-          <Skeleton height={72} style={styles.skeleton} />
-        </View>
+        <ListSkeleton rows={3} height={72} />
       </View>
     );
   }

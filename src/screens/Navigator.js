@@ -170,15 +170,6 @@ const getStyles = (theme) => StyleSheet.create({
   },
   container: {
     flex: 1,
-    ...(Platform.OS === 'web' ? {
-      maxWidth: 800,
-      width: '100%',
-      alignSelf: 'center',
-      backgroundColor: theme.colors.background,
-      borderLeftWidth: 1,
-      borderRightWidth: 1,
-      borderColor: theme.colors.border,
-    } : {}),
   },
   tabBar: {
     backgroundColor: theme.colors.background,
