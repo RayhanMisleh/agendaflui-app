@@ -36,6 +36,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.agendaflui.app",
+      "associatedDomains": [
+        "applinks:app.agendaflui.com.br"
+      ],
       "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -44,6 +47,22 @@
     "android": {
       "package": "com.agendaflui.app",
       "versionCode": 1,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "app.agendaflui.com.br"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F3F8F6"

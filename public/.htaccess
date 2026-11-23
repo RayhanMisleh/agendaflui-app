@@ -25,6 +25,9 @@ AddType font/woff2 .woff2
   # Arquivo estático que falta dá 404 (não devolve a página no lugar de um script).
   RewriteRule ^(_expo|assets)/ - [R=404,L]
 
+  # Arquivo de associação que falta dá 404 (não devolve a página no lugar do JSON).
+  RewriteRule ^\.well-known/ - [R=404,L]
+
   # Qualquer outra rota (/<loja>, /<loja>/pedidos/<id>) abre o app.
   RewriteRule ^ index.html [L]
 </IfModule>
@@ -32,6 +35,14 @@ AddType font/woff2 .woff2
 <IfModule mod_headers.c>
   # Página e manifesto: sempre conferem a versão nova.
   <FilesMatch "\.(html|json)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+
+  # Associação do link https com o app (iOS e Android): JSON, sempre conferido de novo.
+  <Files "apple-app-site-association">
+    ForceType application/json
+  </Files>
+  <FilesMatch "^(apple-app-site-association|assetlinks\.json)$">
     Header set Cache-Control "no-cache"
   </FilesMatch>
 
