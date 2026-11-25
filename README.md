@@ -1,57 +1,33 @@
 # AgendaFlui — aplicativo
 
-Aplicativo do AgendaFlui para web, iOS e Android. O cliente de um negócio agenda horários, acompanha pontos e prêmios do clube e, quando a loja está ligada, compra produtos. Fala com a API v1 do painel (`api.agendaflui.com.br`, contrato em `/v1/openapi.json`).
+**Parado.** O app depende da API v1 (`api.agendaflui.com.br`), que foi removida do backend. Hoje o Agenda Flui roda inteiro no navegador, em `app.agendaflui.com.br` (repositório `painel`). Este app não funciona com o backend atual.
 
-Expo SDK 54, React Native 0.81, JavaScript, react-navigation 7 e axios.
+Para retomar é preciso uma API nova no `painel` (autenticação, agenda, loja, clube, equipe) e adaptar `src/api/` e `src/staff/api.js` ao contrato dela. Hoje o `painel` usa sessão por cookie e ações no servidor, sem endpoints públicos para app nativo.
 
-## Como rodar
+## O que é
+
+Aplicativo para web, iOS e Android: o cliente de um negócio agenda horários, acompanha pontos e prêmios do clube e compra produtos; a equipe vê agenda e perfil. Expo SDK 54, React Native 0.81, JavaScript, react-navigation 7 e axios.
+
+## Rodar
 
 ```bash
 npm install
-cp .env.example .env   # opcional: só para apontar outra API
+cp .env.example .env   # opcional
 npx expo start
-```
-
-- `EXPO_PUBLIC_API_URL`: endereço da API (padrão `https://api.agendaflui.com.br`).
-- `EXPO_PUBLIC_APP_STORE_URL` e `EXPO_PUBLIC_PLAY_STORE_URL`: páginas do app na App Store e no Google Play (só `https://`). Sem elas, a web não mostra os botões de baixar.
-- `EXPO_PUBLIC_PAINEL_URL`: painel completo da equipe (padrão `https://painel.agendaflui.com.br`).
-
-## Como entrar numa loja
-
-- Link `agendaflui://loja/<slug>` no celular, ou `/<slug>` na web.
-- Ou digitando o código da loja na primeira tela.
-
-- Na primeira tela, "Sou cliente" pede o link ou o código da loja; "Sou da equipe" entra com e-mail e senha do painel e já cai na loja da pessoa, com a marca dela. A equipe vê agenda e perfil (gestão fica em "Abrir painel completo").
-
-O aparelho guarda um modo por vez (cliente ou equipe). Entrar num modo apaga a sessão do outro. Com a equipe logada, link de loja é ignorado ("Saia da conta da equipe para entrar como cliente.").
-
-Trocar de loja apaga a sessão, o carrinho e o aparelho de push da loja anterior.
-
-## Testes e verificação
-
-Os testes não usam rede, navegador nem simulador.
-
-```bash
 npm test
-npx expo export --platform web --output-dir dist/web
-npx expo export --platform android --output-dir dist/android
 ```
 
-Versão web para a Hostinger: `npm run build:web` gera `dist/agendaflui-web.zip` (passo a passo em `docs/PUBLICACAO-WEB.md`).
+- `EXPO_PUBLIC_API_URL`: endereço da API (padrão `https://api.agendaflui.com.br`, que não existe mais).
+- `EXPO_PUBLIC_APP_STORE_URL` e `EXPO_PUBLIC_PLAY_STORE_URL`: páginas nas lojas de aplicativos (só `https://`).
+- `EXPO_PUBLIC_PAINEL_URL`: painel da equipe (padrão `https://painel.agendaflui.com.br`).
 
-Lógica (cliente da API, sessão, loja, carrinho, pedido) tem teste em `tests/unit/`; telas não têm teste automático.
+`npm run build:web` gera `dist/agendaflui-web.zip` (site estático; `scripts/web-zip.js`, `scripts/well-known.js` e `public/.htaccess`).
 
-## Limitações
+## Como funciona
 
-- Na web os tokens ficam no `localStorage`; no celular, no SecureStore.
-- A API só aceita o app web vindo das origens liberadas no servidor (`https://app.agendaflui.com.br`).
-- O servidor web precisa devolver o `index.html` para `/<slug>` e `/<slug>/pedidos/<id>`.
-- No celular, a volta do pagamento acontece quando a pessoa fecha o navegador.
+- Entrada: link `agendaflui://loja/<slug>` (celular), `/<slug>` (web) ou código da loja na primeira tela. "Sou da equipe" entra com e-mail e senha.
+- O aparelho guarda um modo por vez (cliente ou equipe); entrar num apaga a sessão do outro. Trocar de loja apaga sessão, carrinho e aparelho de push.
+- Tokens: SecureStore no celular, `localStorage` na web.
+- Os testes (`tests/unit/`) cobrem lógica e não usam rede, navegador nem simulador; telas não têm teste.
 
-## O que é do dono
-
-- `eas init` (projeto EAS e `projectId`, que o push precisa).
-- Preencher os ids das lojas de aplicativos.
-- Revogar, no Google, a chave antiga do app anterior.
-
-Regras para quem programa aqui: `AGENTS.md`.
+Regras para quem programa: `AGENTS.md`.
